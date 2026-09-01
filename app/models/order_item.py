@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -16,6 +16,21 @@ if TYPE_CHECKING:
 
 class OrderItem(TimestampMixin, Base):
     __tablename__ = "order_items"
+
+    __table_args__ = (
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_order_items_quantity_positive",
+        ),
+        CheckConstraint(
+            "unit_price >= 0",
+            name="ck_order_items_unit_price_non_negative",
+        ),
+        CheckConstraint(
+            "subtotal >= 0",
+            name="ck_order_items_subtotal_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 

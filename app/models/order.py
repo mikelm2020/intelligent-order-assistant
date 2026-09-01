@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -16,6 +16,13 @@ if TYPE_CHECKING:
 
 class Order(TimestampMixin, Base):
     __tablename__ = "orders"
+
+    __table_args__ = (
+        CheckConstraint(
+            "total >= 0",
+            name="ck_orders_total_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
