@@ -34,3 +34,14 @@ class ProductRepository:
         result = await self.session.scalars(statement)
 
         return list(result.all())
+
+    async def update_stock(
+        self,
+        product: Product,
+        stock: int,
+    ) -> Product:
+        product.stock = stock
+
+        await self.session.flush()
+
+        return product
