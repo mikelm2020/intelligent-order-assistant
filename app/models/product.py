@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Numeric, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -9,6 +9,17 @@ from app.models.mixins import TimestampMixin
 
 class Product(TimestampMixin, Base):
     __tablename__ = "products"
+
+    __table_args__ = (
+        CheckConstraint(
+            "price >= 0",
+            name="ck_products_price_non_negative",
+        ),
+        CheckConstraint(
+            "stock >= 0",
+            name="ck_products_stock_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
