@@ -11,7 +11,7 @@ from app.main import app
 from app.models.base import Base
 
 TEST_DATABASE_URL = (
-    "postgresql+asyncpg://postgres:postgres@localhost:5433/"
+    "postgresql+asyncpg://postgres:postgres@localhost:5434/"
     "intelligent_order_assistant_test"
 )
 
@@ -24,7 +24,7 @@ TestSessionFactory = async_sessionmaker(
 )
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def prepare_database():
     async with test_engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
