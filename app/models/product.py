@@ -1,10 +1,11 @@
 from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, Numeric, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.mixins import TimestampMixin
+from app.models.order_item import OrderItem
 
 
 class Product(TimestampMixin, Base):
@@ -54,4 +55,8 @@ class Product(TimestampMixin, Base):
         Boolean,
         nullable=False,
         default=True,
+    )
+
+    order_items: Mapped[list["OrderItem"]] = relationship(
+        back_populates="product",
     )
