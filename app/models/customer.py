@@ -1,8 +1,15 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.mixins import TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.order import Order
 
 
 class Customer(TimestampMixin, Base):
@@ -20,4 +27,8 @@ class Customer(TimestampMixin, Base):
         unique=True,
         index=True,
         nullable=False,
+    )
+
+    orders: Mapped[list[Order]] = relationship(
+        back_populates="customer",
     )
