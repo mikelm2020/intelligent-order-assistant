@@ -1,29 +1,23 @@
-[project]
+[tool.poetry]
 name = "intelligent-order-assistant"
 version = "0.1.0"
 description = "AI-ready backend for intelligent e-commerce order management"
-requires-python = ">=3.12"
 
-dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "sqlalchemy[asyncio]>=2.0",
-    "asyncpg",
-    "alembic",
-    "pydantic-settings",
-]
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+sqlalchemy = {extras = ["asyncio"], version = "^2.0"}
+asyncpg = "*"
+alembic = "*"
+pydantic-settings = "*"
 
-[dependency-groups]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "httpx",
-    "ruff",
-]
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1"
+pytest-asyncio = "^1.4"
+httpx2 = "*"
+ruff = "*"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-
-[tool.ruff]
-line-length = 100
-target-version = "py312"
+pythonpath = ["."]
