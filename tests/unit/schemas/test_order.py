@@ -53,3 +53,23 @@ def test_order_customer_id_must_be_positive() -> None:
                 }
             ],
         )
+
+
+def test_order_rejects_duplicate_products() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="Order items cannot contain duplicate products",
+    ):
+        OrderCreate(
+            customer_id=1,
+            items=[
+                {
+                    "product_id": 1,
+                    "quantity": 2,
+                },
+                {
+                    "product_id": 1,
+                    "quantity": 3,
+                },
+            ],
+        )
