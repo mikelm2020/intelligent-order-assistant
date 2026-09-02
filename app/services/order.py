@@ -36,7 +36,9 @@ class OrderService:
 
         try:
             for item_data in data.items:
-                product = await self.product_repository.get_by_id(item_data.product_id)
+                product = await self.product_repository.get_by_id_for_update(
+                    item_data.product_id
+                )
 
                 if product is None:
                     raise ProductNotFoundError(
