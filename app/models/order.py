@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.mixins import TimestampMixin
+from app.models.order_status import OrderStatus
 
 if TYPE_CHECKING:
     from app.models.customer import Customer
@@ -35,7 +36,7 @@ class Order(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
-        default="pending",
+        default=OrderStatus.PENDING.value,
     )
 
     total: Mapped[Decimal] = mapped_column(
