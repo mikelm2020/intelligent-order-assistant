@@ -108,7 +108,7 @@ async def test_create_order_updates_product_stock(
     assert product_response.json()["stock"] == 7
 
 
-async def test_create_order_with_nonexistent_customer_returns_400(
+async def test_create_order_with_nonexistent_customer_returns_404(
     client: AsyncClient,
 ) -> None:
     product = await create_product(client)
@@ -126,11 +126,11 @@ async def test_create_order_with_nonexistent_customer_returns_400(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert response.json()["detail"] == "Customer not found"
 
 
-async def test_create_order_with_nonexistent_product_returns_400(
+async def test_create_order_with_nonexistent_product_returns_404(
     client: AsyncClient,
 ) -> None:
     customer = await create_customer(client)
@@ -148,11 +148,11 @@ async def test_create_order_with_nonexistent_product_returns_400(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert response.json()["detail"] == "Product 9999 not found"
 
 
-async def test_create_order_with_insufficient_stock_returns_400(
+async def test_create_order_with_insufficient_stock_returns_409(
     client: AsyncClient,
 ) -> None:
     customer = await create_customer(client)
@@ -175,13 +175,13 @@ async def test_create_order_with_insufficient_stock_returns_400(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert (
         response.json()["detail"] == f"Insufficient stock for product {product['id']}"
     )
 
 
-async def test_create_order_with_inactive_product_returns_400(
+async def test_create_order_with_inactive_product_returns_409(
     client: AsyncClient,
 ) -> None:
     customer = await create_customer(client)
@@ -204,7 +204,7 @@ async def test_create_order_with_inactive_product_returns_400(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()["detail"] == f"Product {product['id']} is inactive"
 
 
@@ -313,7 +313,7 @@ async def test_create_order_rolls_back_when_one_item_fails(
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert (
         response.json()["detail"] == f"Insufficient stock for product {product_2['id']}"
     )
