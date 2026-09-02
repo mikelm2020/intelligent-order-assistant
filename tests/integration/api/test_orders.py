@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -327,3 +328,44 @@ async def test_create_order_rolls_back_when_one_item_fails(
 
     assert product_1_response.json()["stock"] == 10
     assert product_2_response.json()["stock"] == 1
+
+
+async def test_concurrent_orders_do_not_oversell_stock(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+
+    product = await create_product(
+        client,
+        stock=5,
+        price="100.00",
+    )
+
+    payload = {
+        "customer_id": customer["id"],
+        "items": [
+            {
+                "product_id": product["id"],
+                "quantity": 4,
+            }
+        ],
+    }
+
+    response_1, response_2 = await asyncio.gather(
+        client.post("/api/v1/orders", json=payload),
+        client.post("/api/v1/orders", json=payload),
+    )
+
+    status_codes = sorted(
+        [
+            response_1.status_code,
+            response_2.status_code,
+        ]
+    )
+
+    assert status_codes == [201, 409]
+
+    product_response = await client.get(f"/api/v1/products/{product['id']}")
+
+    assert product_response.status_code == 200
+    assert product_response.json()["stock"] == 1
