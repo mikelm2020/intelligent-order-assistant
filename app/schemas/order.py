@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.order_status import OrderStatus
 from app.schemas.order_item import OrderItemCreate, OrderItemResponse
 
 
@@ -23,7 +24,7 @@ class OrderCreate(BaseModel):
 class OrderResponse(BaseModel):
     id: int
     customer_id: int
-    status: str
+    status: OrderStatus
     total: Decimal
     items: list[OrderItemResponse]
     created_at: datetime

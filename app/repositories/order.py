@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.order_status import OrderStatus
 
 
 class OrderRepository:
@@ -15,11 +16,11 @@ class OrderRepository:
     async def create(
         self,
         customer_id: int,
-        status: str = "pending",
+        status: OrderStatus = OrderStatus.PENDING,
     ) -> Order:
         order = Order(
             customer_id=customer_id,
-            status=status,
+            status=status.value,
         )
 
         self.session.add(order)
