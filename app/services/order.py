@@ -2,6 +2,12 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions.order import (
+    CustomerNotFoundError,
+    InactiveProductError,
+    InsufficientStockError,
+    ProductNotFoundError,
+)
 from app.models.order import Order
 from app.repositories.customer import CustomerRepository
 from app.repositories.order import OrderRepository
@@ -20,7 +26,7 @@ class OrderService:
         customer = await self.customer_repository.get_by_id(data.customer_id)
 
         if customer is None:
-            raise ValueError("Customer not found")
+            raise CustomerNotFoundError("Customer not found")
 
         order = await self.order_repository.create(
             customer_id=data.customer_id,
@@ -33,13 +39,17 @@ class OrderService:
                 product = await self.product_repository.get_by_id(item_data.product_id)
 
                 if product is None:
-                    raise ValueError(f"Product {item_data.product_id} not found")
+                    raise ProductNotFoundError(
+                        f"Product {item_data.product_id} not found"
+                    )
 
                 if not product.active:
-                    raise ValueError(f"Product {product.id} is inactive")
+                    raise InactiveProductError(f"Product {product.id} is inactive")
 
                 if product.stock < item_data.quantity:
-                    raise ValueError(f"Insufficient stock for product {product.id}")
+                    raise InsufficientStockError(
+                        f"Insufficient stock for product {product.id}"
+                    )
 
                 unit_price = product.price
                 subtotal = unit_price * item_data.quantity

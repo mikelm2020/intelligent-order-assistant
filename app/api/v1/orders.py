@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.database import SessionDep
+from app.exceptions.order import OrderError
 from app.schemas.order import OrderCreate, OrderResponse
 from app.services.order import OrderService
 
@@ -20,7 +21,7 @@ async def create_order(
 
     try:
         return await service.create_order(data)
-    except ValueError as exc:
+    except OrderError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
