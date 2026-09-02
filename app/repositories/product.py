@@ -45,3 +45,13 @@ class ProductRepository:
         await self.session.flush()
 
         return product
+
+    async def get_by_id_for_update(
+        self,
+        product_id: int,
+    ) -> Product | None:
+        statement = select(Product).where(Product.id == product_id).with_for_update()
+
+        result = await self.session.scalars(statement)
+
+        return result.first()
