@@ -275,3 +275,55 @@ async def test_list_orders(client: AsyncClient) -> None:
 
     assert len(data) == 1
     assert data[0]["customer_id"] == customer["id"]
+
+
+async def test_create_order_rolls_back_when_one_item_fails(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+
+    product_1 = await create_product(
+        client,
+        sku="PROD-001",
+        stock=10,
+        price="100.00",
+    )
+
+    product_2 = await create_product(
+        client,
+        sku="PROD-002",
+        stock=1,
+        price="50.00",
+    )
+
+    response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product_1["id"],
+                    "quantity": 2,
+                },
+                {
+                    "product_id": product_2["id"],
+                    "quantity": 5,
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"] == f"Insufficient stock for product {product_2['id']}"
+    )
+
+    product_1_response = await client.get(f"/api/v1/products/{product_1['id']}")
+
+    product_2_response = await client.get(f"/api/v1/products/{product_2['id']}")
+
+    assert product_1_response.status_code == 200
+    assert product_2_response.status_code == 200
+
+    assert product_1_response.json()["stock"] == 10
+    assert product_2_response.json()["stock"] == 1
