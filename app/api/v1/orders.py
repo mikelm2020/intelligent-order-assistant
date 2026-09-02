@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.database import SessionDep
-from app.exceptions.order import OrderError
+from app.exceptions.order import (
+    CustomerNotFoundError,
+    InactiveProductError,
+    InsufficientStockError,
+    ProductNotFoundError,
+)
 from app.schemas.order import OrderCreate, OrderResponse
 from app.services.order import OrderService
 
@@ -21,9 +26,28 @@ async def create_order(
 
     try:
         return await service.create_order(data)
-    except OrderError as exc:
+
+    except CustomerNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except ProductNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except InactiveProductError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    except InsufficientStockError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
 
