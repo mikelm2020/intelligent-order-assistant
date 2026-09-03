@@ -16,3 +16,11 @@ class InactiveProductError(OrderError):
 
 class InsufficientStockError(OrderError):
     pass
+
+
+class OrderNotFoundError(OrderError):
+    pass
+
+
+class OrderAlreadyCancelledError(OrderError):
+    pass
