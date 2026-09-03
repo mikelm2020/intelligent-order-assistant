@@ -7,6 +7,7 @@ from app.exceptions.order import (
     InsufficientStockError,
     InvalidOrderStatusTransitionError,
     OrderAlreadyCancelledError,
+    OrderAlreadyConfirmedError,
     OrderNotFoundError,
     ProductNotFoundError,
 )
@@ -114,6 +115,35 @@ async def cancel_order(
         ) from exc
 
     except InvalidOrderStatusTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/{order_id}/confirm",
+    response_model=OrderResponse,
+)
+async def confirm_order(
+    order_id: int,
+    session: SessionDep,
+) -> OrderResponse:
+    service = OrderService(session)
+
+    try:
+        return await service.confirm_order(order_id)
+
+    except OrderNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except (
+        OrderAlreadyConfirmedError,
+        InvalidOrderStatusTransitionError,
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
