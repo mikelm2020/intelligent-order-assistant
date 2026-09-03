@@ -78,3 +78,12 @@ class OrderRepository:
         await self.session.flush()
 
         return order
+
+    async def update_status(
+        self,
+        order: Order,
+        status: OrderStatus,
+    ) -> Order:
+        order.status = status.value
+        await self.session.flush()
+        return order
