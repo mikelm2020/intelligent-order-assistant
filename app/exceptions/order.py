@@ -28,3 +28,7 @@ class OrderAlreadyCancelledError(OrderError):
 
 class InvalidOrderStatusTransitionError(OrderError):
     pass
+
+
+class OrderAlreadyConfirmedError(OrderError):
+    pass
