@@ -6,6 +6,7 @@ from app.exceptions.order import (
     CustomerNotFoundError,
     InactiveProductError,
     InsufficientStockError,
+    InvalidOrderStatusTransitionError,
     OrderAlreadyCancelledError,
     OrderNotFoundError,
     ProductNotFoundError,
@@ -106,6 +107,11 @@ class OrderService:
 
         if order.status == OrderStatus.CANCELLED.value:
             raise OrderAlreadyCancelledError("Order is already cancelled")
+
+        if order.status != OrderStatus.PENDING.value:
+            raise InvalidOrderStatusTransitionError(
+                f"Order with status '{order.status}' cannot be cancelled"
+            )
 
         try:
             for item in order.items:

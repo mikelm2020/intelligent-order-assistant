@@ -24,3 +24,7 @@ class OrderNotFoundError(OrderError):
 
 class OrderAlreadyCancelledError(OrderError):
     pass
+
+
+class InvalidOrderStatusTransitionError(OrderError):
+    pass

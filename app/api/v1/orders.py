@@ -5,6 +5,7 @@ from app.exceptions.order import (
     CustomerNotFoundError,
     InactiveProductError,
     InsufficientStockError,
+    InvalidOrderStatusTransitionError,
     OrderAlreadyCancelledError,
     OrderNotFoundError,
     ProductNotFoundError,
@@ -107,6 +108,12 @@ async def cancel_order(
         ) from exc
 
     except OrderAlreadyCancelledError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    except InvalidOrderStatusTransitionError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
