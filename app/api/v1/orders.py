@@ -1,15 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.api.error_handlers import handle_order_error
 from app.core.database import SessionDep
 from app.exceptions.order import (
-    CustomerNotFoundError,
-    InactiveProductError,
-    InsufficientStockError,
-    InvalidOrderStatusTransitionError,
-    OrderAlreadyCancelledError,
-    OrderAlreadyConfirmedError,
-    OrderNotFoundError,
-    ProductNotFoundError,
+    OrderError,
 )
 from app.schemas.order import OrderCreate, OrderResponse
 from app.services.order import OrderService
@@ -31,29 +25,8 @@ async def create_order(
     try:
         return await service.create_order(data)
 
-    except CustomerNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-    except ProductNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-    except InactiveProductError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-
-    except InsufficientStockError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    except OrderError as exc:
+        raise handle_order_error(exc) from exc
 
 
 @router.get(
@@ -102,23 +75,8 @@ async def cancel_order(
     try:
         return await service.cancel_order(order_id)
 
-    except OrderNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-    except OrderAlreadyCancelledError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-
-    except InvalidOrderStatusTransitionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    except OrderError as exc:
+        raise handle_order_error(exc) from exc
 
 
 @router.post(
@@ -134,17 +92,5 @@ async def confirm_order(
     try:
         return await service.confirm_order(order_id)
 
-    except OrderNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-    except (
-        OrderAlreadyConfirmedError,
-        InvalidOrderStatusTransitionError,
-    ) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    except OrderError as exc:
+        raise handle_order_error(exc) from exc
