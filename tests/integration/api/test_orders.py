@@ -503,3 +503,103 @@ async def test_cancel_already_cancelled_order_returns_409(
 
     assert second_cancel.status_code == 409
     assert second_cancel.json()["detail"] == "Order is already cancelled"
+
+
+async def test_confirm_order(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+    product = await create_product(client)
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    order_id = create_response.json()["id"]
+
+    response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
+
+
+async def test_confirm_nonexistent_order_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.post("/api/v1/orders/9999/confirm")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Order not found"
+
+
+async def test_confirm_already_confirmed_order_returns_409(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+    product = await create_product(client)
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    order_id = create_response.json()["id"]
+
+    first_response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+    assert first_response.status_code == 200
+
+    second_response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "Order is already confirmed"
+
+
+async def test_confirm_cancelled_order_returns_409(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+    product = await create_product(client)
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    order_id = create_response.json()["id"]
+
+    cancel_response = await client.post(f"/api/v1/orders/{order_id}/cancel")
+    assert cancel_response.status_code == 200
+
+    response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"] == "Order with status 'cancelled' cannot be confirmed"
+    )
