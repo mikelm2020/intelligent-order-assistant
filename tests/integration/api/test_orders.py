@@ -369,3 +369,137 @@ async def test_concurrent_orders_do_not_oversell_stock(
 
     assert product_response.status_code == 200
     assert product_response.json()["stock"] == 1
+
+
+async def test_cancel_order_restores_product_stock(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+    product = await create_product(
+        client,
+        stock=10,
+        price="100.00",
+    )
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "quantity": 3,
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    order = create_response.json()
+
+    product_response = await client.get(f"/api/v1/products/{product['id']}")
+    assert product_response.json()["stock"] == 7
+
+    cancel_response = await client.post(f"/api/v1/orders/{order['id']}/cancel")
+
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+
+    product_response = await client.get(f"/api/v1/products/{product['id']}")
+
+    assert product_response.status_code == 200
+    assert product_response.json()["stock"] == 10
+
+
+async def test_cancel_order_restores_stock_for_multiple_products(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+
+    product_1 = await create_product(
+        client,
+        sku="PROD-001",
+        stock=10,
+        price="100.00",
+    )
+    product_2 = await create_product(
+        client,
+        sku="PROD-002",
+        stock=20,
+        price="50.00",
+    )
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product_1["id"],
+                    "quantity": 2,
+                },
+                {
+                    "product_id": product_2["id"],
+                    "quantity": 5,
+                },
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    order_id = create_response.json()["id"]
+
+    cancel_response = await client.post(f"/api/v1/orders/{order_id}/cancel")
+
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+
+    response_1 = await client.get(f"/api/v1/products/{product_1['id']}")
+    response_2 = await client.get(f"/api/v1/products/{product_2['id']}")
+
+    assert response_1.json()["stock"] == 10
+    assert response_2.json()["stock"] == 20
+
+
+async def test_cancel_nonexistent_order_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.post("/api/v1/orders/9999/cancel")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Order not found"
+
+
+async def test_cancel_already_cancelled_order_returns_409(
+    client: AsyncClient,
+) -> None:
+    customer = await create_customer(client)
+    product = await create_product(client)
+
+    create_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    order_id = create_response.json()["id"]
+
+    first_cancel = await client.post(f"/api/v1/orders/{order_id}/cancel")
+
+    assert first_cancel.status_code == 200
+
+    second_cancel = await client.post(f"/api/v1/orders/{order_id}/cancel")
+
+    assert second_cancel.status_code == 409
+    assert second_cancel.json()["detail"] == "Order is already cancelled"
