@@ -8,6 +8,7 @@ from app.exceptions.order import (
     InsufficientStockError,
     InvalidOrderStatusTransitionError,
     OrderAlreadyCancelledError,
+    OrderAlreadyConfirmedError,
     OrderNotFoundError,
     ProductNotFoundError,
 )
@@ -146,3 +147,36 @@ class OrderService:
             raise RuntimeError("Cancelled order could not be retrieved")
 
         return cancelled_order
+
+    async def confirm_order(self, order_id: int) -> Order:
+        order = await self.order_repository.get_by_id(order_id)
+
+        if order is None:
+            raise OrderNotFoundError("Order not found")
+
+        if order.status == OrderStatus.CONFIRMED.value:
+            raise OrderAlreadyConfirmedError("Order is already confirmed")
+
+        if order.status != OrderStatus.PENDING.value:
+            raise InvalidOrderStatusTransitionError(
+                f"Order with status '{order.status}' cannot be confirmed"
+            )
+
+        try:
+            await self.order_repository.update_status(
+                order=order,
+                status=OrderStatus.CONFIRMED,
+            )
+
+            await self.session.commit()
+
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        confirmed_order = await self.order_repository.get_by_id(order.id)
+
+        if confirmed_order is None:
+            raise RuntimeError("Confirmed order could not be retrieved")
+
+        return confirmed_order
