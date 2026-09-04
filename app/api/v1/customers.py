@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.database import SessionDep
-from app.schemas.customer import CustomerCreate, CustomerResponse
+from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 from app.services.customer import CustomerService
 
 router = APIRouter(
@@ -61,3 +61,34 @@ async def list_customers(
     service = CustomerService(session)
 
     return await service.list_customers()
+
+
+@router.patch(
+    "/{customer_id}",
+    response_model=CustomerResponse,
+)
+async def update_customer(
+    customer_id: int,
+    data: CustomerUpdate,
+    session: SessionDep,
+):
+    service = CustomerService(session)
+
+    try:
+        customer = await service.update_customer(
+            customer_id,
+            data,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+
+    return customer
