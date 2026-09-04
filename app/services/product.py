@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
 from app.repositories.product import ProductRepository
-from app.schemas.product import ProductCreate
+from app.schemas.product import ProductCreate, ProductUpdate
 
 
 class ProductService:
@@ -27,3 +27,28 @@ class ProductService:
 
     async def list_products(self) -> list[Product]:
         return await self.repository.list()
+
+    async def update_product(
+        self,
+        product_id: int,
+        data: ProductUpdate,
+    ) -> Product | None:
+        product = await self.repository.get_by_id(product_id)
+
+        if product is None:
+            return None
+
+        if data.sku is not None and data.sku != product.sku:
+            existing_product = await self.repository.get_by_sku(data.sku)
+
+            if existing_product:
+                raise ValueError("Product SKU already exists")
+
+        product = await self.repository.update(
+            product=product,
+            data=data,
+        )
+
+        await self.session.commit()
+
+        return product
