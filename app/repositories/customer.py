@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
-from app.schemas.customer import CustomerCreate
+from app.schemas.customer import CustomerCreate, CustomerUpdate
 
 
 class CustomerRepository:
@@ -34,3 +34,18 @@ class CustomerRepository:
         result = await self.session.scalars(statement)
 
         return list(result.all())
+
+    async def update(
+        self,
+        customer: Customer,
+        data: CustomerUpdate,
+    ) -> Customer:
+        update_data = data.model_dump(exclude_unset=True)
+
+        for field, value in update_data.items():
+            setattr(customer, field, value)
+
+        await self.session.flush()
+        await self.session.refresh(customer)
+
+        return customer
