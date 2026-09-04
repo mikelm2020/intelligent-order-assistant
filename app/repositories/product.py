@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
-from app.schemas.product import ProductCreate
+from app.schemas.product import ProductCreate, ProductUpdate
 
 
 class ProductRepository:
@@ -55,3 +55,18 @@ class ProductRepository:
         result = await self.session.scalars(statement)
 
         return result.first()
+
+    async def update(
+        self,
+        product: Product,
+        data: ProductUpdate,
+    ) -> Product:
+        update_data = data.model_dump(exclude_unset=True)
+
+        for field, value in update_data.items():
+            setattr(product, field, value)
+
+        await self.session.flush()
+        await self.session.refresh(product)
+
+        return product
