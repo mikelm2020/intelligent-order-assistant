@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
 from app.repositories.customer import CustomerRepository
-from app.schemas.customer import CustomerCreate
+from app.schemas.customer import CustomerCreate, CustomerUpdate
 
 
 class CustomerService:
@@ -27,3 +27,28 @@ class CustomerService:
 
     async def list_customers(self) -> list[Customer]:
         return await self.repository.list()
+
+    async def update_customer(
+        self,
+        customer_id: int,
+        data: CustomerUpdate,
+    ) -> Customer | None:
+        customer = await self.repository.get_by_id(customer_id)
+
+        if customer is None:
+            return None
+
+        if data.email is not None and data.email != customer.email:
+            existing_customer = await self.repository.get_by_email(data.email)
+
+            if existing_customer:
+                raise ValueError("Customer email already exists")
+
+        customer = await self.repository.update(
+            customer=customer,
+            data=data,
+        )
+
+        await self.session.commit()
+
+        return customer
