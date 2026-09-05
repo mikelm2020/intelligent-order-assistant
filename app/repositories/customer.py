@@ -1,7 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
+from app.models.order import Order
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 
 
@@ -49,3 +50,20 @@ class CustomerRepository:
         await self.session.refresh(customer)
 
         return customer
+
+    async def delete(
+        self,
+        customer: Customer,
+    ) -> None:
+        await self.session.delete(customer)
+        await self.session.flush()
+
+    async def has_orders(
+        self,
+        customer_id: int,
+    ) -> bool:
+        statement = select(exists().where(Order.customer_id == customer_id))
+
+        result = await self.session.scalar(statement)
+
+        return bool(result)
