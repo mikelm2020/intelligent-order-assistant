@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions.product import ProductHasOrdersError
 from app.models.product import Product
 from app.repositories.product import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
@@ -52,3 +53,20 @@ class ProductService:
         await self.session.commit()
 
         return product
+
+    async def delete_product(
+        self,
+        product_id: int,
+    ) -> bool:
+        product = await self.repository.get_by_id(product_id)
+
+        if product is None:
+            return False
+
+        if await self.repository.has_order_items(product_id):
+            raise ProductHasOrdersError("Product used in orders cannot be deleted")
+
+        await self.repository.delete(product)
+        await self.session.commit()
+
+        return True
