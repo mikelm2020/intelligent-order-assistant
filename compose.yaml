@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: intelligent_orders
       POSTGRES_USER: postgres
@@ -11,7 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
   
   postgres_test:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: intelligent_order_assistant_test
       POSTGRES_USER: postgres
