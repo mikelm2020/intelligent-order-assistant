@@ -178,3 +178,83 @@ async def test_update_customer_with_duplicate_email_returns_409(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Customer email already exists"
+
+
+async def test_delete_customer(client: AsyncClient) -> None:
+    create_response = await client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Customer To Delete",
+            "email": "delete@example.com",
+        },
+    )
+
+    customer_id = create_response.json()["id"]
+
+    response = await client.delete(f"/api/v1/customers/{customer_id}")
+
+    assert response.status_code == 204
+
+    get_response = await client.get(f"/api/v1/customers/{customer_id}")
+
+    assert get_response.status_code == 404
+
+
+async def test_delete_nonexistent_customer_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.delete("/api/v1/customers/9999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Customer not found"
+
+
+async def test_delete_customer_with_orders_returns_409(
+    client: AsyncClient,
+) -> None:
+    customer_response = await client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Customer With Order",
+            "email": "orders@example.com",
+        },
+    )
+
+    product_response = await client.post(
+        "/api/v1/products",
+        json={
+            "sku": "PROD-DELETE-001",
+            "name": "Test Product",
+            "description": None,
+            "price": "100.00",
+            "stock": 10,
+            "active": True,
+        },
+    )
+
+    customer_id = customer_response.json()["id"]
+    product_id = product_response.json()["id"]
+
+    order_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer_id,
+            "items": [
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    assert order_response.status_code == 201
+
+    response = await client.delete(f"/api/v1/customers/{customer_id}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Customer with orders cannot be deleted"
+
+    get_response = await client.get(f"/api/v1/customers/{customer_id}")
+
+    assert get_response.status_code == 200
