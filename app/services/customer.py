@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions.customer import CustomerHasOrdersError
 from app.models.customer import Customer
 from app.repositories.customer import CustomerRepository
 from app.schemas.customer import CustomerCreate, CustomerUpdate
@@ -52,3 +53,20 @@ class CustomerService:
         await self.session.commit()
 
         return customer
+
+    async def delete_customer(
+        self,
+        customer_id: int,
+    ) -> bool:
+        customer = await self.repository.get_by_id(customer_id)
+
+        if customer is None:
+            return False
+
+        if await self.repository.has_orders(customer_id):
+            raise CustomerHasOrdersError("Customer with orders cannot be deleted")
+
+        await self.repository.delete(customer)
+        await self.session.commit()
+
+        return True
