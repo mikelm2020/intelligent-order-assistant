@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.database import SessionDep
+from app.exceptions.product import ProductHasOrdersError
 from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from app.services.product import ProductService
 
@@ -92,3 +93,28 @@ async def update_product(
         )
 
     return product
+
+
+@router.delete(
+    "/{product_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_product(
+    product_id: int,
+    session: SessionDep,
+) -> None:
+    service = ProductService(session)
+
+    try:
+        deleted = await service.delete_product(product_id)
+    except ProductHasOrdersError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
