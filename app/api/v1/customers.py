@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.database import SessionDep
+from app.exceptions.customer import CustomerHasOrdersError
 from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
 from app.services.customer import CustomerService
 
@@ -92,3 +93,28 @@ async def update_customer(
         )
 
     return customer
+
+
+@router.delete(
+    "/{customer_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_customer(
+    customer_id: int,
+    session: SessionDep,
+) -> None:
+    service = CustomerService(session)
+
+    try:
+        deleted = await service.delete_customer(customer_id)
+    except CustomerHasOrdersError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
