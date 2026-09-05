@@ -245,3 +245,87 @@ async def test_update_product_with_duplicate_sku_returns_409(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Product SKU already exists"
+
+
+async def test_delete_product(client: AsyncClient) -> None:
+    create_response = await client.post(
+        "/api/v1/products",
+        json={
+            "sku": "PROD-DELETE-001",
+            "name": "Product To Delete",
+            "description": None,
+            "price": "100.00",
+            "stock": 10,
+            "active": True,
+        },
+    )
+
+    product_id = create_response.json()["id"]
+
+    response = await client.delete(f"/api/v1/products/{product_id}")
+
+    assert response.status_code == 204
+
+    get_response = await client.get(f"/api/v1/products/{product_id}")
+
+    assert get_response.status_code == 404
+
+
+async def test_delete_nonexistent_product_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.delete("/api/v1/products/9999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"
+
+
+async def test_delete_product_used_in_order_returns_409(
+    client: AsyncClient,
+) -> None:
+    customer_response = await client.post(
+        "/api/v1/customers",
+        json={
+            "name": "Test Customer",
+            "email": "customer@example.com",
+        },
+    )
+
+    product_response = await client.post(
+        "/api/v1/products",
+        json={
+            "sku": "PROD-ORDER-001",
+            "name": "Product With Order",
+            "description": None,
+            "price": "100.00",
+            "stock": 10,
+            "active": True,
+        },
+    )
+
+    customer_id = customer_response.json()["id"]
+    product_id = product_response.json()["id"]
+
+    order_response = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer_id,
+            "items": [
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+
+    assert order_response.status_code == 201
+
+    response = await client.delete(f"/api/v1/products/{product_id}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Product used in orders cannot be deleted"
+
+    get_response = await client.get(f"/api/v1/products/{product_id}")
+
+    assert get_response.status_code == 200
