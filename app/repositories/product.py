@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
 
@@ -70,3 +71,20 @@ class ProductRepository:
         await self.session.refresh(product)
 
         return product
+
+    async def has_order_items(
+        self,
+        product_id: int,
+    ) -> bool:
+        statement = select(exists().where(OrderItem.product_id == product_id))
+
+        result = await self.session.scalar(statement)
+
+        return bool(result)
+
+    async def delete(
+        self,
+        product: Product,
+    ) -> None:
+        await self.session.delete(product)
+        await self.session.flush()
