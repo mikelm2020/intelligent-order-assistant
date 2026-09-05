@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.database import get_db
 from app.main import app
@@ -15,7 +16,10 @@ TEST_DATABASE_URL = (
     "intelligent_order_assistant_test"
 )
 
-test_engine = create_async_engine(TEST_DATABASE_URL)
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    poolclass=NullPool,
+)
 
 TestSessionFactory = async_sessionmaker(
     bind=test_engine,
@@ -34,8 +38,6 @@ async def prepare_database():
 
     async with test_engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
-
-    await test_engine.dispose()
 
 
 @pytest_asyncio.fixture
