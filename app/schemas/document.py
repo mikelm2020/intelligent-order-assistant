@@ -18,3 +18,17 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class DocumentChunkResponse(BaseModel):
+    id: int
+    document_id: int
+    chunk_index: int
+    content: str
+
+    model_config = ConfigDict(from_attributes=True)
