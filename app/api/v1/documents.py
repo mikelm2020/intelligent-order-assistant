@@ -7,8 +7,14 @@ from app.ai.factory import get_embedding_provider
 from app.core.database import SessionDep
 from app.repositories.document import DocumentRepository
 from app.repositories.document_chunk import DocumentChunkRepository
-from app.schemas.document import DocumentCreate, DocumentResponse
+from app.schemas.document import (
+    DocumentChunkResponse,
+    DocumentCreate,
+    DocumentResponse,
+    DocumentSearchRequest,
+)
 from app.services.document_ingestion import DocumentIngestionService
+from app.services.document_retrieval import DocumentRetrievalService
 
 EmbeddingProviderDep = Annotated[
     EmbeddingProvider,
@@ -47,3 +53,25 @@ async def create_document(
     await session.refresh(document)
 
     return DocumentResponse.model_validate(document)
+
+
+@router.post(
+    "/search",
+    response_model=list[DocumentChunkResponse],
+)
+async def search_documents(
+    data: DocumentSearchRequest,
+    session: SessionDep,
+    embedding_provider: EmbeddingProviderDep,
+) -> list[DocumentChunkResponse]:
+    service = DocumentRetrievalService(
+        chunk_repository=DocumentChunkRepository(session),
+        embedding_provider=embedding_provider,
+    )
+
+    chunks = await service.search(
+        data.query,
+        limit=data.limit,
+    )
+
+    return [DocumentChunkResponse.model_validate(chunk) for chunk in chunks]
