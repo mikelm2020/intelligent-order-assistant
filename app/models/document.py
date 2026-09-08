@@ -1,6 +1,7 @@
-from pgvector.sqlalchemy import Vector
+from typing import Any
+
 from sqlalchemy import String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.mixins import TimestampMixin
@@ -26,7 +27,8 @@ class Document(TimestampMixin, Base):
         nullable=False,
     )
 
-    embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(1536),
-        nullable=True,
+    chunks: Mapped[list[Any]] = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
     )
