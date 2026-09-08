@@ -6,9 +6,9 @@ from app.repositories.document_chunk import DocumentChunkRepository
 class DocumentIngestionService:
     def __init__(
         self,
-        document_repository: DocumentRepository,
-        chunk_repository: DocumentChunkRepository,
-        embedding_provider: EmbeddingProvider,
+        document_repository: DocumentRepository | None = None,
+        chunk_repository: DocumentChunkRepository | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
         *,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
@@ -58,6 +58,16 @@ class DocumentIngestionService:
         content: str,
         source: str | None = None,
     ):
+        if (
+            self.document_repository is None
+            or self.chunk_repository is None
+            or self.embedding_provider is None
+        ):
+            raise RuntimeError(
+                "document_repository, chunk_repository and embedding_provider "
+                "are required for ingestion"
+            )
+
         chunks = self.split_text(content)
 
         if not chunks:
