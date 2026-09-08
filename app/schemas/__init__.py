@@ -16,6 +16,7 @@ from app.schemas.product import (
     ProductResponse,
     ProductUpdate,
 )
+from app.schemas.rag import RAGAnswerResponse, RAGQuestionRequest
 
 __all__ = [
     "CustomerCreate",
@@ -32,4 +33,6 @@ __all__ = [
     "ProductCreate",
     "ProductResponse",
     "ProductUpdate",
+    "RAGAnswerResponse",
+    "RAGQuestionRequest",
 ]
