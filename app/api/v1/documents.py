@@ -1,11 +1,19 @@
-from fastapi import APIRouter, status
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, status
+
+from app.ai.embeddings import EmbeddingProvider
 from app.ai.factory import get_embedding_provider
 from app.core.database import SessionDep
 from app.repositories.document import DocumentRepository
 from app.repositories.document_chunk import DocumentChunkRepository
 from app.schemas.document import DocumentCreate, DocumentResponse
 from app.services.document_ingestion import DocumentIngestionService
+
+EmbeddingProviderDep = Annotated[
+    EmbeddingProvider,
+    Depends(get_embedding_provider),
+]
 
 router = APIRouter(
     prefix="/documents",
@@ -21,11 +29,12 @@ router = APIRouter(
 async def create_document(
     data: DocumentCreate,
     session: SessionDep,
+    embedding_provider: EmbeddingProviderDep,
 ) -> DocumentResponse:
     service = DocumentIngestionService(
         document_repository=DocumentRepository(session),
         chunk_repository=DocumentChunkRepository(session),
-        embedding_provider=get_embedding_provider(),
+        embedding_provider=embedding_provider,
     )
 
     document = await service.ingest(
