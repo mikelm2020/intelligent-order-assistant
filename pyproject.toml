@@ -13,6 +13,7 @@ alembic = "*"
 pydantic-settings = "*"
 email-validator = "^2.3.0"
 pgvector = "^0.5.0"
+openai = "^3.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1"

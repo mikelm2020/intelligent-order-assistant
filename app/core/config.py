@@ -9,6 +9,9 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    openai_api_key: str | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
