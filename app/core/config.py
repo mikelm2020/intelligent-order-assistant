@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_chat_model: str = "gpt-5.6-luna"
 
     model_config = SettingsConfigDict(
         env_file=".env",
