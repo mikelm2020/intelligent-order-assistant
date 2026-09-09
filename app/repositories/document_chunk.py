@@ -42,3 +42,26 @@ class DocumentChunkRepository:
 
         result = await self.session.scalars(statement)
         return list(result.all())
+
+    async def similarity_search_with_distance(
+        self,
+        embedding: list[float],
+        limit: int = 5,
+    ) -> list[tuple[DocumentChunk, float]]:
+        distance = DocumentChunk.embedding.cosine_distance(embedding).label("distance")
+
+        statement = (
+            select(
+                DocumentChunk,
+                distance,
+            )
+            .where(DocumentChunk.embedding.is_not(None))
+            .order_by(distance)
+            .limit(limit)
+        )
+
+        result = await self.session.execute(statement)
+
+        return [
+            (chunk, float(distance_value)) for chunk, distance_value in result.all()
+        ]
