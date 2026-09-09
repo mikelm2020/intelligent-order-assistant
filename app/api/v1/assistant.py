@@ -51,6 +51,7 @@ async def ask_assistant(
     answer = await rag_service.answer(
         data.question,
         limit=data.limit,
+        max_distance=data.max_distance,
     )
 
     return RAGAnswerResponse(answer=answer)
