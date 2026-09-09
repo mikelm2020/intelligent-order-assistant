@@ -17,6 +17,7 @@ class DocumentRetrievalService:
         query: str,
         *,
         limit: int = 5,
+        max_distance: float | None = None,
     ) -> list[DocumentChunk]:
         query = query.strip()
 
@@ -25,7 +26,15 @@ class DocumentRetrievalService:
 
         embedding = await self.embedding_provider.embed(query)
 
-        return await self.chunk_repository.similarity_search(
+        if max_distance is None:
+            return await self.chunk_repository.similarity_search(
+                embedding=embedding,
+                limit=limit,
+            )
+
+        results = await self.chunk_repository.similarity_search_with_distance(
             embedding=embedding,
             limit=limit,
         )
+
+        return [chunk for chunk, distance in results if distance <= max_distance]
