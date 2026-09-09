@@ -6,6 +6,7 @@ from app.ai.chat import ChatProvider
 from app.ai.chat_factory import get_chat_provider
 from app.ai.embeddings import EmbeddingProvider
 from app.ai.factory import get_embedding_provider
+from app.core.config import settings
 from app.core.database import SessionDep
 from app.repositories.document_chunk import DocumentChunkRepository
 from app.schemas.rag import RAGAnswerResponse, RAGQuestionRequest
@@ -51,7 +52,7 @@ async def ask_assistant(
     answer = await rag_service.answer(
         data.question,
         limit=data.limit,
-        max_distance=data.max_distance,
+        max_distance=settings.rag_max_distance,
     )
 
     return RAGAnswerResponse(answer=answer)

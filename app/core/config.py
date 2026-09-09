@@ -19,6 +19,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    rag_max_distance: float = 0.4
+
 
 @lru_cache
 def get_settings() -> Settings:
