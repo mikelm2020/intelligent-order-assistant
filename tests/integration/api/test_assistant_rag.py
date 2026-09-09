@@ -94,3 +94,55 @@ async def test_assistant_returns_rag_answer(
             "si el producto conserva su empaque original."
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_assistant_returns_fallback_when_no_relevant_context(
+    client,
+    session: AsyncSession,
+    mock_embedding_provider,
+    mock_chat_provider,
+):
+    document = Document(
+        title="Política de devoluciones",
+        content="Documento de prueba",
+        source="test",
+    )
+
+    session.add(document)
+    await session.flush()
+
+    session.add(
+        DocumentChunk(
+            document_id=document.id,
+            chunk_index=0,
+            content="Información no relacionada con la pregunta.",
+            embedding=[0.0, 1.0, 0.0] + [0.0] * 1533,
+        )
+    )
+
+    await session.commit()
+
+    response = await client.post(
+        "/api/v1/assistant/ask",
+        json={
+            "question": "¿Ofrecen garantía de cinco años?",
+            "limit": 1,
+            "max_distance": 0.4,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["answer"] == (
+        "No tengo información suficiente en la documentación "
+        "disponible para responder esa pregunta."
+    )
+
+    mock_embedding_provider.embed.assert_awaited_once_with(
+        "¿Ofrecen garantía de cinco años?"
+    )
+
+    mock_chat_provider.generate.assert_not_awaited()
