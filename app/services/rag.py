@@ -16,6 +16,7 @@ class RAGService:
         question: str,
         *,
         limit: int = 5,
+        max_distance: float | None = None,
     ) -> str:
         question = question.strip()
 
@@ -25,7 +26,14 @@ class RAGService:
         chunks = await self.retrieval_service.search(
             question,
             limit=limit,
+            max_distance=max_distance,
         )
+
+        if not chunks:
+            return (
+                "No tengo información suficiente en la documentación "
+                "disponible para responder esa pregunta."
+            )
 
         context = "\n\n".join(chunk.content for chunk in chunks)
 
