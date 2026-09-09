@@ -71,6 +71,7 @@ async def test_assistant_returns_rag_answer(
         json={
             "question": "¿Puedo devolver un producto después de 20 días?",
             "limit": 1,
+            "max_distance": 0.4,
         },
     )
 
