@@ -228,7 +228,7 @@ The default development configuration is:
 APP_NAME=Intelligent Order Assistant
 ENVIRONMENT=development
 
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/intelligent_orders
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5435/intelligent_orders
 
 OPENAI_API_KEY=
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
@@ -246,7 +246,7 @@ Start PostgreSQL with pgvector:
 docker compose up -d
 ```
 
-The development database is exposed on port `5433`.
+The development database is exposed on port `5435`.
 
 The isolated test database is exposed on port `5434`.
 
