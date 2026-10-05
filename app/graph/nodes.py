@@ -10,3 +10,23 @@ class RAGNode:
         answer = await self.rag_service.answer(state["question"])
 
         return {"answer": answer}
+
+
+class RouterNode:
+    async def __call__(self, state: AssistantState) -> dict[str, str]:
+        question = state["question"].lower()
+
+        order_keywords = (
+            "orden",
+            "pedido",
+            "cancelar",
+            "confirmar",
+        )
+
+        intent = (
+            "order"
+            if any(keyword in question for keyword in order_keywords)
+            else "knowledge"
+        )
+
+        return {"intent": intent}
