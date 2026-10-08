@@ -40,7 +40,7 @@ class OrderService:
         total = Decimal("0.00")
 
         try:
-            for item_data in data.items:
+            for item_data in sorted(data.items, key=lambda item: item.product_id):
                 product = await self.product_repository.get_by_id_for_update(
                     item_data.product_id
                 )
@@ -100,8 +100,8 @@ class OrderService:
     async def list_orders(self) -> list[Order]:
         return await self.order_repository.list()
 
-    async def cancel_order(self, order_id: int) -> Order:
-        order = await self.order_repository.get_by_id(order_id)
+    async def cancel_order(self, order_id: int, *, commit: bool = True) -> Order:
+        order = await self.order_repository.get_by_id_for_update(order_id)
 
         if order is None:
             raise OrderNotFoundError("Order not found")
@@ -115,7 +115,7 @@ class OrderService:
             )
 
         try:
-            for item in order.items:
+            for item in sorted(order.items, key=lambda item: item.product_id):
                 product = await self.product_repository.get_by_id_for_update(
                     item.product_id
                 )
@@ -135,7 +135,10 @@ class OrderService:
                 status=OrderStatus.CANCELLED,
             )
 
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
 
         except Exception:
             await self.session.rollback()
@@ -148,8 +151,8 @@ class OrderService:
 
         return cancelled_order
 
-    async def confirm_order(self, order_id: int) -> Order:
-        order = await self.order_repository.get_by_id(order_id)
+    async def confirm_order(self, order_id: int, *, commit: bool = True) -> Order:
+        order = await self.order_repository.get_by_id_for_update(order_id)
 
         if order is None:
             raise OrderNotFoundError("Order not found")
@@ -168,7 +171,10 @@ class OrderService:
                 status=OrderStatus.CONFIRMED,
             )
 
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
 
         except Exception:
             await self.session.rollback()
