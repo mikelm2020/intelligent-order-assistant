@@ -6,3 +6,4 @@ class AssistantState(TypedDict):
     answer: str
     intent: Literal["knowledge", "order"]
     order_id: int | None
+    order_action: Literal["lookup", "confirm", "cancel"] | None

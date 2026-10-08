@@ -42,10 +42,20 @@ class RouterNode:
         )
 
         order_id = extract_order_id(question) if intent == "order" else None
+        order_action = None
+
+        if intent == "order":
+            if "cancelar" in question:
+                order_action = "cancel"
+            elif "confirmar" in question:
+                order_action = "confirm"
+            else:
+                order_action = "lookup"
 
         return {
             "intent": intent,
             "order_id": order_id,
+            "order_action": order_action,
         }
 
 

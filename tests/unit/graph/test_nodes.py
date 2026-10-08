@@ -18,6 +18,9 @@ async def test_rag_node_returns_answer() -> None:
         {
             "question": "¿Cuál es la política de devoluciones?",
             "answer": "",
+            "intent": "knowledge",
+            "order_id": None,
+            "order_action": None,
         }
     )
 
@@ -35,12 +38,14 @@ async def test_router_node_routes_order_question() -> None:
             "answer": "",
             "intent": "knowledge",
             "order_id": None,
+            "order_action": None,
         }
     )
 
     assert result == {
         "intent": "order",
         "order_id": 15,
+        "order_action": "lookup",
     }
 
 
@@ -54,12 +59,67 @@ async def test_router_node_routes_knowledge_question() -> None:
             "answer": "",
             "intent": "knowledge",
             "order_id": None,
+            "order_action": None,
         }
     )
 
     assert result == {
         "intent": "knowledge",
         "order_id": None,
+        "order_action": None,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("question", "order_id", "order_action"),
+    [
+        ("Consulta la orden 15", 15, "lookup"),
+        ("Mi pedido #27", 27, "lookup"),
+        ("Quiero CONFIRMAR la orden 15", 15, "confirm"),
+        ("Quiero cancelar el pedido 8", 8, "cancel"),
+        ("Quiero consultar mi pedido", None, "lookup"),
+        ("Quiero confirmar mi orden", None, "confirm"),
+        ("Quiero cancelar mi pedido", None, "cancel"),
+        ("Confirmar o cancelar la orden 15", 15, "cancel"),
+    ],
+)
+async def test_router_node_detects_order_action(
+    question: str, order_id: int | None, order_action: str
+) -> None:
+    result = await RouterNode()(
+        {
+            "question": question,
+            "answer": "",
+            "intent": "knowledge",
+            "order_id": None,
+            "order_action": None,
+        }
+    )
+
+    assert result == {
+        "intent": "order",
+        "order_id": order_id,
+        "order_action": order_action,
+    }
+
+
+@pytest.mark.asyncio
+async def test_router_node_clears_order_action_for_knowledge() -> None:
+    result = await RouterNode()(
+        {
+            "question": "¿Qué formas de pago aceptan?",
+            "answer": "",
+            "intent": "order",
+            "order_id": 15,
+            "order_action": "cancel",
+        }
+    )
+
+    assert result == {
+        "intent": "knowledge",
+        "order_id": None,
+        "order_action": None,
     }
 
 
@@ -90,6 +150,7 @@ async def test_order_node_requests_order_id_when_missing() -> None:
             "answer": "",
             "intent": "order",
             "order_id": None,
+            "order_action": None,
         }
     )
 
@@ -110,6 +171,7 @@ async def test_order_node_returns_not_found() -> None:
             "answer": "",
             "intent": "order",
             "order_id": 15,
+            "order_action": "lookup",
         }
     )
 
@@ -134,6 +196,7 @@ async def test_order_node_returns_order_summary() -> None:
             "answer": "",
             "intent": "order",
             "order_id": 15,
+            "order_action": "lookup",
         }
     )
 
