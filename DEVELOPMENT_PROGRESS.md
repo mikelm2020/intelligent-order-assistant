@@ -175,9 +175,9 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
   Python también está fijado por digest en Dockerfile.
 - Stack completo verificado con el override efímero de testing. El Compose de
   despliegue con datos persistentes de desarrollo/producción no se ejecutó.
-- La decisión concreta fue autorizada, pero la solicitud exacta estaba expirada.
-  No se ejecutó la cancelación; el stack temporal ya fue retirado. El cierre HITL
-  requiere otra demo con una solicitud vigente y autorización de esa nueva solicitud.
+- La solicitud anterior expiró y no se ejecutó. La nueva demo HITL ya completó
+  aprobación, cancelación y replay con autorización específica; ambas demos
+  temporales fueron retiradas. Las cinco fases del plan están completas localmente.
 - GitHub Actions remoto, llamadas reales a OpenAI y despliegue público no se han
   ejecutado. No se hizo push.
 - Límites documentados: roles compartidos single-tenant, sin identidades personales
@@ -271,12 +271,38 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
 
 ## Próximos pasos
 
-1. Resolver el cierre de fase 5 con una nueva demo, solicitud HITL vigente y
-   autorización específica de esa solicitud; verificar cancelación, stock 10 y replay.
-   La autorización anterior corresponde exclusivamente a una solicitud expirada.
-2. Para GitHub: `origin` está configurado y la rama local no tiene upstream.
+### Nueva demo HITL completada y fase 5 cerrada (2026-10-08)
+
+- Proyecto Docker nuevo: `ioa-hitl-final-20261008`, base efímera exclusiva
+  `intelligent_order_assistant_test`, conexión interna `db:5432`, API localhost:19841.
+- Destino verificado mediante `current_database()` antes de inicialización y
+  configuración efectiva del API comprobada: testing, demo offline y
+  `APPROVAL_TTL_SECONDS=86400` (24 horas), sin alterar validaciones de aprobación.
+- Imagen construida desde el código actual: `intelligent-order-assistant:hitl-final-20261008`,
+  ID `c8cdec89fa02`. Preparación de demo completada con RAG/fallback/consulta/pausa.
+- Nueva solicitud: `6f345657-4980-4be5-9f44-b1810886fd31`; cancelar orden sintética 1,
+  total 51.00. El usuario aprobó expresamente esta solicitud concreta.
+- Antes de ejecutar se verificaron etiquetas del proyecto, `current_database()`,
+  conexión efectiva del API, testing/demo, solicitud vigente pending_approval,
+  acción cancel, orden 1 pendiente y stock inicial 8. No se reutilizó la anterior.
+- Decisión por HTTP con credencial revisor: resultado **completed**, orden
+  **cancelled**, stock **10**. Repetir la misma decisión devolvió un resultado
+  idéntico, orden cancelada y stock **10**, sin doble restitución.
+- Retirados solo los tres contenedores y red de `ioa-hitl-final-20261008`, la
+  etiqueta de imagen de esta demo y el archivo de credenciales/directorio temporal.
+- Las cinco fases del plan están completas dentro del alcance local. La caducidad
+  del intento anterior se conserva como evidencia histórica, no como pendiente.
+- Se actualiza únicamente documentación; no se agregaron funcionalidades ni se
+  cambió Python. No corresponde repetir suite/build por esos cambios documentales.
+- Verificación final: Ruff check correcto, formato conforme (117 archivos),
+  `git diff --check` sin errores. Consultas Docker por etiqueta confirmaron que
+  no quedan contenedores, redes ni volúmenes del nuevo proyecto; los contenedores
+  existentes siguen activos. Última suite completa: **156 passed en 22.55 s**.
+  Preparación y aprobación/replay de la nueva demo completadas con assertions reales.
+
+1. Para GitHub: `origin` está configurado y la rama local no tiene upstream.
    Pendiente autorización separada de push, ejecución/revisión de CI remoto y PR
    contra `main`. No se hicieron operaciones remotas de escritura.
-3. Llamadas OpenAI y despliegue público permanecen fuera del alcance.
+2. Llamadas OpenAI y despliegue público permanecen fuera del alcance.
 
 El inventario anterior de archivos corresponde a la pausa y es histórico.

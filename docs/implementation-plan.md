@@ -24,14 +24,13 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
    health/readiness, errores sanitizados, Docker sin privilegios y Compose separado
    de desarrollo. PostgreSQL 17/pgvector fijado por digest en despliegue y CI.
    El workflow define Ruff, suite y build; su ejecución remota está pendiente.
-5. **Documentación y entrega local — documentada; cierre HITL bloqueado por caducidad.**
+5. **Documentación y entrega local — completada.**
    README y AGENTS alineados al código; evidencia y límites actualizados. Los
    archivos pendientes de Docker/CI/documentación se registraron en commits
    locales. El stack Compose completo se verificó con el override de testing;
-   el usuario autorizó la decisión concreta, pero al verificarla la solicitud
-   exacta ya estaba expirada. No se canceló la orden ni se comprobó el replay
-   de esta demo. Se retiraron sus recursos temporales. La fase no se declara
-   completamente terminada hasta verificar una decisión HITL vigente. No se hizo push.
+   la nueva demo HITL fue autorizada específicamente y completada: orden cancelada,
+   stock restituido a 10 y replay sin duplicación. Recursos temporales retirados.
+   Las cinco fases están completas dentro del alcance local. No se hizo push.
 
 ## Decisiones
 
@@ -92,11 +91,20 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
   el servicio de testing en 5434 permanecen activos; no se afectaron otros proyectos.
 - Ninguna llamada real a OpenAI ni migración sobre datos de desarrollo/producción.
 - GitHub Actions remoto y despliegue público permanecen sin ejecutar.
+- Cierre de fase 5: proyecto nuevo `ioa-hitl-final-20261008`, base efímera
+  `intelligent_order_assistant_test`, imagen construida `c8cdec89fa02`, demo offline
+  y TTL de 24 horas mediante configuración existente. Solicitud nueva
+  `6f345657-4980-4be5-9f44-b1810886fd31`, autorizada expresamente por el usuario.
+  Proyecto, conexión efectiva, base, vigencia, orden 1 y acción cancel verificados
+  antes de la decisión con rol revisor. Resultado completed, orden cancelled,
+  stock **8 → 10**; segunda decisión idéntica devuelve el mismo resultado y
+  conserva stock **10**. No se reutilizó ni modificó la solicitud expirada.
+- Retirados exclusivamente contenedores/red del nuevo proyecto, etiqueta de
+  imagen de la demo y credenciales temporales. Sin nuevas funcionalidades ni
+  cambios de Python; la suite de 156 casos sigue siendo la última suite completa.
 
 ## Pendiente para publicar en GitHub
 
-- Resolver el cierre del smoke con una nueva solicitud HITL vigente y su
-  autorización específica; verificar cancelación, stock 10 y replay sin duplicación.
 - El remoto `origin` ya está configurado; la rama local
   `feature/langgraph-orchestration` no tiene upstream. Con autorización separada,
   publicar la rama, ejecutar GitHub Actions y revisar sus resultados reales.
