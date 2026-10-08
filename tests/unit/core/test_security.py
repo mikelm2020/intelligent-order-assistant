@@ -52,6 +52,18 @@ def test_same_credentials_are_rejected():
         )
 
 
+def test_settings_representation_does_not_expose_database_credentials():
+    config = Settings(
+        _env_file=None,
+        database_url=(
+            "postgresql+asyncpg://test:synthetic-password@localhost:5434/"
+            "intelligent_order_assistant_test"
+        ),
+    )
+    assert "synthetic-password" not in repr(config)
+    assert "database_url=" not in repr(config)
+
+
 def test_missing_ai_credentials_return_sanitized_error(monkeypatch):
     from fastapi.testclient import TestClient
 

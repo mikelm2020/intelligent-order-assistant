@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "Intelligent Order Assistant"
     environment: str = "development"
 
-    database_url: str
+    database_url: str = Field(repr=False)
 
     operator_api_key: SecretStr | None = None
     reviewer_api_key: SecretStr | None = None
