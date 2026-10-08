@@ -271,6 +271,21 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
 
 ## Próximos pasos
 
+### Revisión del README previa a publicación (2026-10-08)
+
+- README reescrito en español tras contrastar routers, schemas, servicios,
+  grafo, seguridad, configuración, scripts, Docker/Compose y CI con el código.
+- Incluye problema, características reales, diagrama Mermaid, flujos RAG/HITL,
+  tecnologías, instalación, configuración, endpoints y ejemplos HTTP, demo,
+  testing y límites. Distingue búsqueda sin umbral de RAG y roles de identidades.
+- Validación documental: 20 bloques Bash con `bash -n`, contratos JSON con
+  Pydantic, rutas/métodos contra OpenAPI, rutas de salud/documentación y enlaces
+  locales. Compose validado con variables ficticias; Ruff y formato correctos.
+- Sin llamadas HTTP reales, conexiones a bases, inicialización, tests destructivos
+  ni costes de IA. No se repitió la suite ni el build por un cambio documental.
+- Cambian únicamente README y este registro. Commit local autorizado, sin push
+  ni PR; publicación pendiente de revisión del usuario.
+
 ### Nueva demo HITL completada y fase 5 cerrada (2026-10-08)
 
 - Proyecto Docker nuevo: `ioa-hitl-final-20261008`, base efímera exclusiva
