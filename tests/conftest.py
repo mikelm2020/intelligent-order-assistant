@@ -3,9 +3,7 @@ import os
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from pydantic import SecretStr
 from sqlalchemy import text
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -13,36 +11,31 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from app.core.config import settings
-from app.core.database import get_db
-from app.graph.checkpointer import checkpoint_conn_string, get_checkpointer
-from app.main import app
-from app.models.base import Base
+from scripts.prepare_test_database import validate_test_database_url
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5434/"
     "intelligent_order_assistant_test",
 )
-
-
-def validate_test_database_url(url: str) -> None:
-    parsed = make_url(url)
-    if (
-        parsed.database != "intelligent_order_assistant_test"
-        or parsed.host not in {"localhost", "127.0.0.1"}
-        or parsed.port != 5434
-        or parsed.drivername != "postgresql+asyncpg"
-    ):
-        raise RuntimeError("Refusing destructive tests outside the local test database")
-
-
 validate_test_database_url(TEST_DATABASE_URL)
 
-# Ensure unit tests never need a real OpenAI key. No requests use this dummy key.
-settings.openai_api_key = "test-only-not-a-real-key"
-settings.operator_api_key = SecretStr("test-operator-key-00000000000000000")
-settings.reviewer_api_key = SecretStr("test-reviewer-key-00000000000000000")
+# Establish safe defaults before importing the application, so even its default
+# engine cannot point to development/production during a test run.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["OPENAI_API_KEY"] = "test-only-not-a-real-key"
+os.environ["OPERATOR_API_KEY"] = "test-operator-key-00000000000000000"
+os.environ["REVIEWER_API_KEY"] = "test-reviewer-key-00000000000000000"
+os.environ["AI_PROVIDER"] = "openai"
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.graph.checkpointer import (
+    checkpoint_conn_string,
+    get_checkpointer,
+)
+from app.main import app
+from app.models.base import Base
 
 test_engine = create_async_engine(
     TEST_DATABASE_URL,

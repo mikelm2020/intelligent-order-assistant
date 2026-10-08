@@ -23,6 +23,7 @@ pytest = "^9.1"
 pytest-asyncio = "^1.4"
 httpx2 = "*"
 ruff = "*"
+httpx = "^0.28.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
