@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,7 +35,8 @@ class Settings(BaseSettings):
             raise ValueError("Approval TTL must be positive")
         return self
 
-    openai_api_key: str | None = None
+    ai_provider: Literal["openai", "demo"] = "openai"
+    openai_api_key: SecretStr | None = None
     openai_embedding_model: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-5.6-luna"
 
@@ -42,9 +44,10 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
-    rag_max_distance: float = 0.4
+    rag_max_distance: float = Field(default=0.4, ge=0, le=2)
 
 
 @lru_cache

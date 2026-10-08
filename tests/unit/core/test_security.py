@@ -50,3 +50,23 @@ def test_same_credentials_are_rejected():
             operator_api_key=SecretStr("a" * 32),
             reviewer_api_key=SecretStr("a" * 32),
         )
+
+
+def test_missing_ai_credentials_return_sanitized_error(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "ai_provider", "openai")
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/documents",
+            headers={
+                "Authorization": "Bearer "
+                + settings.operator_api_key.get_secret_value()
+            },
+            json={"title": "Document", "content": "Demo"},
+        )
+    assert response.status_code == 503
+    assert response.json() == {"detail": "AI provider credentials are not configured"}
