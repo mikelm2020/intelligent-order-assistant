@@ -75,6 +75,39 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
   `git diff --check` sin errores. Solo configuración/documentación cambió después
   de la suite; no se repitieron tests sin nuevos cambios de Python.
 
+## Cierre solicitado de la fase 5: caducidad y limpieza (2026-10-08)
+
+- El usuario autorizó expresamente cancelar la orden sintética 1 mediante la
+  solicitud `2afffa8f-b620-4b49-a4d3-6442b6debdde`, solo en
+  `ioa-validation-20261008`, y retirar después los recursos de esa demo.
+- Se verificaron etiquetas Docker del proyecto, contenedores activos,
+  `current_database() = intelligent_order_assistant_test`, configuración efectiva
+  `ENVIRONMENT=testing`, proveedor demo y conexión interna `db:5432` a esa base.
+- Consulta HTTP autenticada como revisor: ID exacto, acción cancel, orden 1,
+  total 51.00; la orden seguía pending y el stock era 8. La solicitud devolvió
+  **expired**, por lo que no era válida para aprobación HITL.
+- No se envió la decisión, no se alteró TTL/fecha/estado y no se generó otra
+  solicitud. La autorización exacta no se amplió a una solicitud nueva.
+- La cancelación, stock final 10 y replay de esta demo no se verificaron.
+  Las pruebas automatizadas de esos comportamientos sí pasaron en la suite
+  previa de 156 casos. No presentar la demo expirada como una cancelación exitosa.
+- Limpieza autorizada completada: `docker compose ... down` del proyecto exacto,
+  retirada de la etiqueta `intelligent-order-assistant:validation-20261008` y
+  eliminación exclusiva del archivo `testing.env` y su directorio temporal.
+  No se usó prune, no había volumen persistente, no se eliminaron imágenes base
+  ni contenedores de desarrollo/testing existentes u otros proyectos.
+- Fases 1–4 del plan implementadas y verificadas localmente. Documentación de
+  fase 5 actualizada; cierre de validación HITL bloqueado por la caducidad de la
+  solicitud autorizada. No se declaran completas las cinco fases.
+- Solo se modificaron documentos; no se introdujeron nuevas funcionalidades.
+- Verificaciones finales: Ruff check y formato sin errores (117 archivos),
+  `git diff --check` sin errores; consultas Docker por etiqueta de proyecto
+  confirmaron ausencia de contenedores/redes/volúmenes de la demo y los servicios
+  preexistentes siguen activos. Archivo temporal y etiqueta de imagen retirados.
+  No se repitió pytest ni build: no cambió Python ni configuración desde las
+  verificaciones previas de 156 casos y build exitoso. Se registra este cierre
+  en un commit local de documentación; no se hizo push.
+
 ## Trabajo realizado al reanudar (2026-10-08)
 
 - Se leyeron AGENTS, este registro, diffs y archivos pendientes; no se repitieron
@@ -142,8 +175,9 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
   Python también está fijado por digest en Dockerfile.
 - Stack completo verificado con el override efímero de testing. El Compose de
   despliegue con datos persistentes de desarrollo/producción no se ejecutó.
-- La decisión concreta de la demo actual requiere autorización específica tras
-  rechazo automático; solicitud y stack permanecen pendientes.
+- La decisión concreta fue autorizada, pero la solicitud exacta estaba expirada.
+  No se ejecutó la cancelación; el stack temporal ya fue retirado. El cierre HITL
+  requiere otra demo con una solicitud vigente y autorización de esa nueva solicitud.
 - GitHub Actions remoto, llamadas reales a OpenAI y despliegue público no se han
   ejecutado. No se hizo push.
 - Límites documentados: roles compartidos single-tenant, sin identidades personales
@@ -187,7 +221,7 @@ locales autorizados; ahora AGENTS contiene actualizaciones adicionales sin commi
 - `cfba253` — `fix: validate native checkpoint dependency and enforce approval invariants`
 
 Los commits posteriores a la pausa se realizaron al recibir la autorización
-de reanudación: `d5b71ac`, `7428837`, `b60d0bf`, `fb56eab`, `391584c`.
+de reanudación: `d5b71ac`, `7428837`, `b60d0bf`, `fb56eab`, `391584c`, `fe51ee8`.
 
 ## Últimas verificaciones reales
 
@@ -237,12 +271,12 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
 
 ## Próximos pasos
 
-1. Obtener autorización para la cancelación concreta descrita en la fase 3;
-   entonces verificar decisión, replay y stock restituido a 10, exclusivamente
-   dentro del stack efímero de testing. No repetir la suite mientras se usa esa base.
-2. Tras completar o descartar esa decisión, retirar únicamente el proyecto
-   `ioa-validation-20261008` y su archivo temporal de credenciales. No retirar
-   los contenedores existentes de desarrollo/testing ni otros proyectos.
-3. CI remoto, llamadas OpenAI y despliegue público permanecen fuera del alcance.
+1. Resolver el cierre de fase 5 con una nueva demo, solicitud HITL vigente y
+   autorización específica de esa solicitud; verificar cancelación, stock 10 y replay.
+   La autorización anterior corresponde exclusivamente a una solicitud expirada.
+2. Para GitHub: `origin` está configurado y la rama local no tiene upstream.
+   Pendiente autorización separada de push, ejecución/revisión de CI remoto y PR
+   contra `main`. No se hicieron operaciones remotas de escritura.
+3. Llamadas OpenAI y despliegue público permanecen fuera del alcance.
 
 El inventario anterior de archivos corresponde a la pausa y es histórico.

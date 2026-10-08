@@ -24,12 +24,14 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
    health/readiness, errores sanitizados, Docker sin privilegios y Compose separado
    de desarrollo. PostgreSQL 17/pgvector fijado por digest en despliegue y CI.
    El workflow define Ruff, suite y build; su ejecución remota está pendiente.
-5. **Documentación y entrega local — registrada en commits; validación final en curso.**
+5. **Documentación y entrega local — documentada; cierre HITL bloqueado por caducidad.**
    README y AGENTS alineados al código; evidencia y límites actualizados. Los
    archivos pendientes de Docker/CI/documentación se registraron en commits
    locales. El stack Compose completo se verificó con el override de testing;
-   la decisión concreta de la demo actual espera autorización tras un rechazo
-   de revisión automática. No se hizo push.
+   el usuario autorizó la decisión concreta, pero al verificarla la solicitud
+   exacta ya estaba expirada. No se canceló la orden ni se comprobó el replay
+   de esta demo. Se retiraron sus recursos temporales. La fase no se declara
+   completamente terminada hasta verificar una decisión HITL vigente. No se hizo push.
 
 ## Decisiones
 
@@ -75,13 +77,31 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
   verificado antes de migrar, inicialización exit 0, API healthy en localhost:19841.
   Verificados RAG/fallback, consulta, pausa, health/readiness, 401, UID 10001,
   filesystem de solo lectura, sin capabilities ni `.env` y checkpoint tras
-  reinicio del API. La orden sintética permanece pendiente con stock 8.
+  reinicio del API. En la verificación final, la orden sintética seguía pendiente
+  con stock 8 y la solicitud estaba expirada; después se retiró el stack.
 - La revisión automática rechazó ejecutar la decisión de cancelación concreta
   de esta demo sin autorización específica. La aprobación/replay en la suite
   pasó, y existe evidencia del smoke anterior; la decisión del smoke actual
-  no se ejecutó y no se contabiliza como verificada.
+  no se ejecutó y no se contabiliza como verificada. Posteriormente el usuario
+  autorizó exactamente esa solicitud; la comprobación previa confirmó proyecto,
+  entorno, base, ID y vista previa, pero devolvió `status: expired`. No se alteró
+  la caducidad ni se creó una solicitud sustituta bajo esa autorización.
+- Limpieza final: eliminados solo los tres contenedores y red del proyecto
+  `ioa-validation-20261008`, su etiqueta de imagen y su directorio temporal de
+  credenciales. PostgreSQL efímero no tenía volumen persistente. Desarrollo y
+  el servicio de testing en 5434 permanecen activos; no se afectaron otros proyectos.
 - Ninguna llamada real a OpenAI ni migración sobre datos de desarrollo/producción.
 - GitHub Actions remoto y despliegue público permanecen sin ejecutar.
+
+## Pendiente para publicar en GitHub
+
+- Resolver el cierre del smoke con una nueva solicitud HITL vigente y su
+  autorización específica; verificar cancelación, stock 10 y replay sin duplicación.
+- El remoto `origin` ya está configurado; la rama local
+  `feature/langgraph-orchestration` no tiene upstream. Con autorización separada,
+  publicar la rama, ejecutar GitHub Actions y revisar sus resultados reales.
+- Crear/revisar un PR contra `main` y autorizar su integración según el flujo
+  elegido. Ninguna publicación, PR ni merge remoto se ejecutó durante este cierre.
 
 ## Límites posteriores
 
