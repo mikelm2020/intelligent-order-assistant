@@ -27,9 +27,10 @@ Reutilizar los servicios existentes desde la API y LangGraph. No duplicar reglas
 de negocio en nodos o routers ni acoplar servicios directamente a proveedores
 externos. Evitar dependencias nuevas si las herramientas existentes son suficientes.
 
-Actualmente `/api/v1/assistant/ask` ejecuta RAG directamente. El grafo tiene rutas
-de conocimiento y consulta de pedidos, pero no está integrado en ese endpoint.
-La declaración de `order_action` no implica que existan acciones implementadas.
+Actualmente `/api/v1/assistant/ask` ejecuta el grafo LangGraph con rutas de RAG,
+consulta y acciones de pedidos. Las acciones se pausan mediante `interrupt()` y
+checkpoints de PostgreSQL hasta que un revisor decide. Reutilizar los servicios y
+preservar el recibo transaccional de ejecución que protege los reintentos.
 
 ## Pedidos y escrituras de negocio
 
@@ -45,10 +46,11 @@ La declaración de `order_action` no implica que existan acciones implementadas.
   constituye aprobación. Los flujos deben permitir revisar la acción antes de
   ejecutarla y reutilizar `OrderService`.
 
-Estas reglas de aprobación son instrucciones para agentes y requisitos de
-funcionalidades futuras. Los endpoints actuales de pedidos no implementan
-autenticación ni aprobación humana. No presentar esas protecciones como
-funcionalidades ya implementadas.
+Estas reglas son instrucciones para agentes y requisitos de los flujos de
+negocio. El API implementa credenciales Bearer de operador/revisor; las decisiones
+del asistente requieren un revisor distinto del solicitante. Los POST directos
+de confirmación/cancelación requieren el rol revisor. No confundir esos roles
+compartidos con autenticación de usuarios individuales ni con aislamiento por cliente.
 
 ## RAG y LangGraph
 
@@ -59,7 +61,7 @@ funcionalidades ya implementadas.
 - Mantener compatibilidad con embeddings de 1536 dimensiones en pgvector. Un
   cambio de modelo o dimensiones exige revisar persistencia y migraciones.
 - Preservar y propagar `limit` y `max_distance` entre API, grafo y servicios.
-  El `RAGNode` actual no los propaga: atender esta limitación al integrar el grafo.
+  `RAGNode` los propaga desde el estado; mantener la política del servidor.
 - Mantener proveedores intercambiables y comprobables mediante sus interfaces.
 
 ## Pruebas y calidad
@@ -78,9 +80,10 @@ funcionalidades ya implementadas.
   exclusivamente a testing: base `intelligent_order_assistant_test`, puerto local
   `5434`, nunca a desarrollo o producción.
 - `tests/conftest.py` tiene una fixture global `autouse` que ejecuta `drop_all`
-  y `create_all` antes de cada test y `drop_all` después, incluso en unitarios.
-  Una ejecución enfocada también requiere verificar el destino y autorización
-  para esas operaciones destructivas; no asumir que es inocua por ser unitaria.
+  y `create_all` antes de cada test de integración/evaluación y `drop_all` después.
+  Las pruebas unitarias no ejecutan esas operaciones. El guard valida tanto URL
+  como `current_database()` y establece configuración de testing antes de importar
+  la aplicación. Verificar el destino y la autorización para pruebas destructivas.
 - Una autorización previa que cubra la ejecución de las pruebas y sus efectos
   destructivos es suficiente; no solicitarla repetidamente. La verificación del
   destino efectivo sigue siendo obligatoria.
@@ -99,8 +102,8 @@ Ejecutar desde la raíz. Esta lista documenta comandos; no autoriza su ejecució
 | Iniciar API local | `poetry run uvicorn app.main:app --reload` | Usa `settings`, cargado desde variables de entorno y `.env`; verificar el destino efectivo. |
 | Revisar lint | `poetry run ruff check --no-cache .` | Sin correcciones automáticas. |
 | Comprobar formato | `poetry run ruff format --check --no-cache .` | Sin modificar archivos. |
-| Pruebas de nodos | `poetry run pytest tests/unit/graph/test_nodes.py` | Verificar testing y autorizar efectos destructivos de la fixture. |
-| Pruebas del grafo | `poetry run pytest tests/unit/graph/test_graph.py` | Mismas condiciones para la base de pruebas. |
+| Pruebas de nodos | `poetry run pytest tests/unit/graph/test_nodes.py` | Pruebas unitarias sin inicializar la base de datos. |
+| Pruebas del grafo | `poetry run pytest tests/unit/graph/test_graph.py` | Pruebas unitarias sin inicializar la base de datos. |
 | Pruebas RAG | `poetry run pytest tests/unit/services/test_rag.py tests/integration/api/test_assistant_rag.py` | Mismas condiciones para la base de pruebas. |
 | Suite completa | `poetry run pytest` | Mismas condiciones para la base de pruebas. |
 | Aplicar migraciones | `poetry run alembic upgrade head` | Solo con autorización explícita y destino verificado. |
@@ -136,7 +139,7 @@ reportar la actualización pendiente.
 
 Distinguir claramente lo implementado en código, lo probado con resultados
 verificados y lo pendiente. No presentar roadmap como funcionalidad disponible
-ni afirmar integración HTTP de LangGraph mientras no exista.
+ni afirmar funcionalidades de autorización, IA o despliegue que no se hayan implementado.
 
 ## Metodología
 
