@@ -4,7 +4,8 @@
 
 Backend de portafolio demostrable: conservar las capas existentes, hacer efectivo
 el flujo LangGraph/HITL, asegurar consistencia transaccional y disponer de pruebas,
-CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en cloud.
+CI y un contenedor reproducible. La publicación de rama y PR fue autorizada
+posteriormente; no incluye fusión ni despliegue en cloud.
 
 ## Fases
 
@@ -23,14 +24,15 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
    Proveedor offline explícito; script con preparación y decisión en dos pasos;
    health/readiness, errores sanitizados, Docker sin privilegios y Compose separado
    de desarrollo. PostgreSQL 17/pgvector fijado por digest en despliegue y CI.
-   El workflow define Ruff, suite y build; su ejecución remota está pendiente.
+   El workflow ejecuta Ruff, suite y build; su ejecución remota pasó en push y PR.
 5. **Documentación y entrega local — completada.**
    README y AGENTS alineados al código; evidencia y límites actualizados. Los
    archivos pendientes de Docker/CI/documentación se registraron en commits
    locales. El stack Compose completo se verificó con el override de testing;
    la nueva demo HITL fue autorizada específicamente y completada: orden cancelada,
    stock restituido a 10 y replay sin duplicación. Recursos temporales retirados.
-   Las cinco fases están completas dentro del alcance local. No se hizo push.
+   Las cinco fases están completas. Posteriormente se publicó la rama autorizada
+   y se abrió el PR #1 hacia main, sin fusionarlo.
 
 ## Decisiones
 
@@ -90,7 +92,8 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
   credenciales. PostgreSQL efímero no tenía volumen persistente. Desarrollo y
   el servicio de testing en 5434 permanecen activos; no se afectaron otros proyectos.
 - Ninguna llamada real a OpenAI ni migración sobre datos de desarrollo/producción.
-- GitHub Actions remoto y despliegue público permanecen sin ejecutar.
+- GitHub Actions remoto pasó al publicar la rama y abrir el PR. El despliegue
+  público permanece sin ejecutar.
 - Cierre de fase 5: proyecto nuevo `ioa-hitl-final-20261008`, base efímera
   `intelligent_order_assistant_test`, imagen construida `c8cdec89fa02`, demo offline
   y TTL de 24 horas mediante configuración existente. Solicitud nueva
@@ -103,13 +106,21 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
   imagen de la demo y credenciales temporales. Sin nuevas funcionalidades ni
   cambios de Python; la suite de 156 casos sigue siendo la última suite completa.
 
-## Pendiente para publicar en GitHub
+## Publicación en GitHub y revisión pendiente
 
-- El remoto `origin` ya está configurado; la rama local
-  `feature/langgraph-orchestration` no tiene upstream. Con autorización separada,
-  publicar la rama, ejecutar GitHub Actions y revisar sus resultados reales.
-- Crear/revisar un PR contra `main` y autorizar su integración según el flujo
-  elegido. Ninguna publicación, PR ni merge remoto se ejecutó durante este cierre.
+- Rama `feature/langgraph-orchestration` publicada únicamente en `origin`, sin
+  force push, con upstream configurado. README confirmado y árbol limpio antes
+  de publicar; auditoría de los 21 commits iniciales sin secretos conocidos ni
+  archivos de entorno sensibles detectados. Solo `.env.example` está versionado.
+- [PR #1](https://github.com/mikelm2020/intelligent-order-assistant/pull/1) abierto
+  hacia `main`, sin fusionar ni modificar main directamente.
+- [CI por PR](https://github.com/mikelm2020/intelligent-order-assistant/actions/runs/37851868516)
+  pasó: Ruff/formato, **156 passed en 20.87 s** y build Docker. También pasó
+  [CI por push](https://github.com/mikelm2020/intelligent-order-assistant/actions/runs/37851861308).
+  No se requirieron correcciones de implementación.
+- Pendiente revisión del PR y autorización separada para fusionar. GitHub avisó
+  sobre las acciones basadas en Node.js 20 (ejecutadas con Node.js 24) y la futura
+  migración de `ubuntu-latest`; no bloquearon los jobs.
 
 ## Límites posteriores
 

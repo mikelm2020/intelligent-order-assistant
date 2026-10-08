@@ -10,7 +10,9 @@ Autorización vigente: decisiones técnicas, edición/refactor, Ruff, unitarias,
 integración exclusivamente en testing tras verificar destino, builds locales,
 commits locales pequeños y documentación. No repetir solicitudes de autorización
 para esas operaciones. Prohibido modificar desarrollo/producción, migrar fuera
-de testing, hacer push, publicar, generar costes o afectar otros proyectos.
+de testing, desplegar públicamente, generar costes o afectar otros proyectos.
+Autorización posterior: publicar únicamente `feature/langgraph-orchestration`
+en origin sin force push y abrir un PR hacia main, sin fusionarlo.
 
 ## Fase 1: registro de cambios pendientes (2026-10-08)
 
@@ -178,8 +180,8 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
 - La solicitud anterior expiró y no se ejecutó. La nueva demo HITL ya completó
   aprobación, cancelación y replay con autorización específica; ambas demos
   temporales fueron retiradas. Las cinco fases del plan están completas localmente.
-- GitHub Actions remoto, llamadas reales a OpenAI y despliegue público no se han
-  ejecutado. No se hizo push.
+- GitHub Actions remoto pasó en push y PR tras la autorización de publicación.
+  Llamadas reales a OpenAI y despliegue público siguen sin ejecutar.
 - Límites documentados: roles compartidos single-tenant, sin identidades personales
   ni aislamiento por cliente; sin paginación, rate limiting, Idempotency-Key para
   creación de pedidos, citas estructuradas o retención de checkpoints. La garantía
@@ -271,6 +273,23 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
 
 ## Próximos pasos
 
+### Rama publicada y PR abierto (2026-10-08)
+
+- README confirmado en `8a9f47d`, árbol limpio y destino origin verificado antes
+  del push. Se auditaron los 21 commits salientes y 132 blobs/mensajes nuevos:
+  sin valores secretos locales conocidos, patrones de claves privadas/credenciales
+  ni artefactos sensibles detectados. Solo `.env.example` está versionado.
+- Publicada únicamente `feature/langgraph-orchestration`, sin force push, con
+  upstream configurado. PR: https://github.com/mikelm2020/intelligent-order-assistant/pull/1
+  hacia main, abierto y sin fusionar. Main no se modificó directamente.
+- CI real inicial: push `37851861308` y PR `37851868516`, ambos success.
+  El job del PR pasó Ruff, formato, **156 pruebas en 20.87 s** y build Docker.
+  No fue necesario corregir implementación. README y plan actualizan esta evidencia.
+- Avisos no bloqueantes de GitHub: acciones Node.js 20 forzadas a Node.js 24 y
+  próxima migración de ubuntu-latest. No se cambiaron dependencias para silenciarlos.
+- Se publica un commit documental de evidencia y se verifican los checks de
+  ese nuevo HEAD antes de entregar. No se ejecutan servicios de pago ni despliegues.
+
 ### Revisión del README previa a publicación (2026-10-08)
 
 - README reescrito en español tras contrastar routers, schemas, servicios,
@@ -315,9 +334,8 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
   existentes siguen activos. Última suite completa: **156 passed en 22.55 s**.
   Preparación y aprobación/replay de la nueva demo completadas con assertions reales.
 
-1. Para GitHub: `origin` está configurado y la rama local no tiene upstream.
-   Pendiente autorización separada de push, ejecución/revisión de CI remoto y PR
-   contra `main`. No se hicieron operaciones remotas de escritura.
+1. Revisar el PR #1 abierto hacia main. Su fusión requiere autorización separada;
+   no fusionar automáticamente. La rama ya está publicada y CI remoto pasó.
 2. Llamadas OpenAI y despliegue público permanecen fuera del alcance.
 
 El inventario anterior de archivos corresponde a la pausa y es histórico.

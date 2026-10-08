@@ -13,8 +13,8 @@ capas, contratos HTTP, persistencia asíncrona, pruebas de concurrencia y un flu
 HITL (*human in the loop*) persistente y recuperable.
 
 **Estado:** las cinco fases del [plan de implementación](docs/implementation-plan.md)
-están completadas y verificadas localmente. La ejecución remota de GitHub Actions,
-las llamadas reales a OpenAI y el despliegue público siguen pendientes.
+están completadas y verificadas localmente. GitHub Actions pasó también en remoto.
+Las llamadas reales a OpenAI y el despliegue público siguen pendientes.
 
 ## Características implementadas
 
@@ -487,13 +487,15 @@ casos y vectores sintéticos; no mide la calidad de modelos reales.
 **Evidencia local registrada el 8 de octubre de 2026:** suite completa de
 **156 pruebas** pasada en PostgreSQL 17.11; build Docker y demo HITL con cancelación,
 stock 8 → 10 y replay sin doble restitución. Estos son resultados de esa ejecución,
-no un badge de CI remoto. Detalles en [el plan](docs/implementation-plan.md) y
+corresponden a verificaciones locales. Detalles en [el plan](docs/implementation-plan.md) y
 [el registro de desarrollo](DEVELOPMENT_PROGRESS.md).
 
 [El workflow de CI](.github/workflows/ci.yml) está definido para push y pull request:
 instala Poetry/dependencias, prepara pgvector en PostgreSQL 17 efímero, comprueba
 Ruff y formato, ejecuta la suite y construye la imagen. No publica ni despliega.
-Su ejecución remota todavía no se ha comprobado.
+La [ejecución remota del PR](https://github.com/mikelm2020/intelligent-order-assistant/actions/runs/37851868516)
+del 8 de octubre de 2026 terminó correctamente: Ruff, formato, **156 pruebas en
+20.87 s** y build Docker. También pasó la ejecución disparada por el push.
 
 ## Limitaciones y posibles mejoras
 
