@@ -124,6 +124,15 @@ posteriormente; no incluye fusión ni despliegue en cloud.
 
 ## Límites posteriores
 
+Revisión técnica final del PR #1: sin bloqueantes adicionales en autorización,
+HITL/replay, inventario, RAG, errores, migraciones, Docker o CI para el alcance
+documentado. Dos hallazgos importantes corregidos: URL con `%` rechazadas por la
+interpolación de ConfigParser en Alembic y contraseña de base visible en
+`repr(Settings)`. Regresiones reproducidas antes del arreglo y suite posterior:
+**158 passed en 20.12 s**, exclusivamente en localhost:5434/testing, incluido
+round trip de migraciones. Se conservan como opcionales los límites siguientes;
+no se implementan funcionalidades nuevas ni se autoriza merge.
+
 Antes de servir usuarios reales: identidades individuales y scopes por cliente,
 rate limiting, paginación, retención de checkpoints, backups y proxy TLS. RAG puede
 ampliarse con citas, evaluación de modelos reales y reranking según evidencia. La

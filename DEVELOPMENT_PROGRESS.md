@@ -273,6 +273,30 @@ tratarse como datos reales. No se modificó `.env` ni se migró la base de desar
 
 ## Próximos pasos
 
+### Revisión técnica final del PR #1 (2026-10-08)
+
+- Revisión de cambios reales contra origin/main: credenciales y roles, rutas,
+  estado/checkpoints, autorización persistida, recibo transaccional/replay,
+  bloqueo de órdenes/productos, RAG/umbral/fallback, errores, esquema/Alembic,
+  Docker/Compose, CI y contratos documentados. PR permanece abierto hacia main.
+- Bloqueantes: ninguno adicional identificado para el alcance single-tenant
+  documentado. Importantes: Alembic rechazaba `%` en URLs válidas (y el error
+  incluía la URL); Settings mostraba la contraseña de base en su representación.
+- Correcciones mínimas: escapar `%` solo al pasar por ConfigParser, preservando
+  la URL efectiva; excluir database_url de repr sin cambiar su tipo ni consumidores.
+  Nuevas regresiones unitarias: generación SQL offline con URL codificada y
+  representación de Settings sin credenciales. Ambas fallaron antes del arreglo.
+- Destino efectivo verificado antes de integración:
+  localhost:5434/intelligent_order_assistant_test. Suite completa posterior:
+  **158 passed en 20.12 s**, incluyendo carreras/HITL y round trip/alembic check.
+- Ruff check y formato conformes (118 archivos); git diff --check correcto.
+  Ejecución enfocada dentro del sandbox bloqueada e interrumpida, no contabilizada.
+  Suite posterior completada fuera del sandbox con autorización vigente.
+- Opcionales: avisos Node.js/ubuntu-latest del CI, retención, rate limiting,
+  identidades por cliente y evaluación RAG real, ya documentados. Sin cambios
+  cosméticos ni nuevas funcionalidades. Correcciones publicadas en la misma rama;
+  CI del nuevo HEAD se verifica antes de entregar, sin fusionar ni desplegar.
+
 ### Rama publicada y PR abierto (2026-10-08)
 
 - README confirmado en `8a9f47d`, árbol limpio y destino origin verificado antes

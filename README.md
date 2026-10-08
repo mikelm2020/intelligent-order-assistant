@@ -176,6 +176,8 @@ Cambiar el modelo de embeddings requiere conservar compatibilidad con 1536
 dimensiones y revisar el corpus. Al cambiar entre demo y OpenAI, usa una base
 separada o reingesta los documentos; no mezcles sus embeddings. Los modelos
 configurados son valores del código, no una garantía de disponibilidad en tu cuenta.
+Las contraseñas con caracteres reservados deben codificarse en la URL; Alembic
+preserva esos escapes. La URL de conexión se omite de la representación de Settings.
 
 ## Ejecución local
 
@@ -489,6 +491,10 @@ casos y vectores sintéticos; no mide la calidad de modelos reales.
 stock 8 → 10 y replay sin doble restitución. Estos son resultados de esa ejecución,
 corresponden a verificaciones locales. Detalles en [el plan](docs/implementation-plan.md) y
 [el registro de desarrollo](DEVELOPMENT_PROGRESS.md).
+
+La revisión técnica final añadió regresiones para URLs con contraseñas codificadas
+y para evitar exponer credenciales de base en `repr(Settings)`: la suite local
+actualizada pasó **158 pruebas en 20.12 s**, exclusivamente en testing verificado.
 
 [El workflow de CI](.github/workflows/ci.yml) está definido para push y pull request:
 instala Poetry/dependencias, prepara pgvector en PostgreSQL 17 efímero, comprueba
