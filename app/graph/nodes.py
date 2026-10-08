@@ -1,4 +1,5 @@
 import re
+from typing import Any
 
 from langgraph.types import interrupt
 
@@ -78,7 +79,7 @@ class OrderNode:
     def __init__(self, order_service: OrderService) -> None:
         self.order_service = order_service
 
-    async def __call__(self, state: AssistantState) -> dict[str, str]:
+    async def __call__(self, state: AssistantState) -> dict[str, Any]:
         if state.get("routing_error"):
             return {"answer": state["routing_error"], "order_preview": None}
 

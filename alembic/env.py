@@ -19,6 +19,20 @@ config.set_main_option(
 target_metadata = Base.metadata
 
 
+CHECKPOINT_TABLES = {
+    "checkpoint_migrations",
+    "checkpoints",
+    "checkpoint_blobs",
+    "checkpoint_writes",
+}
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    # The official checkpointer owns these tables; Alembic must never propose
+    # dropping them during business-schema autogeneration.
+    return not (type_ == "table" and name in CHECKPOINT_TABLES)
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -36,6 +50,7 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
+        include_object=include_object,
         dialect_opts={"paramstyle": "named"},
     )
 
@@ -44,7 +59,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

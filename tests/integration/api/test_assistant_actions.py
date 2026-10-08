@@ -180,3 +180,64 @@ async def test_missing_order_and_ambiguous_action_do_not_pause(client):
 async def test_whitespace_question_rejected(client):
     response = await client.post("/api/v1/assistant/ask", json={"question": "   "})
     assert response.status_code == 422
+
+
+async def test_reviewer_cannot_approve_own_request(client):
+    order_id, _ = await pending_order(client)
+    response = await client.post(
+        "/api/v1/assistant/ask",
+        json={"question": f"Cancelar la orden {order_id}"},
+        headers=REVIEWER,
+    )
+    run_id = response.json()["run_id"]
+    decision = await client.post(
+        f"/api/v1/assistant/runs/{run_id}/decision",
+        json={"approve": True},
+        headers=REVIEWER,
+    )
+    assert decision.status_code == 403
+
+
+async def test_readiness_checks_initialized_testing_schema(client):
+    response = await client.get("/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+async def test_offline_demo_preserves_retrieval_and_fallback(client, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "demo")
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    response = await client.post(
+        "/api/v1/documents",
+        json={
+            "title": "Devoluciones",
+            "content": "Las devoluciones se aceptan dentro de 30 días.",
+        },
+    )
+    assert response.status_code == 201
+    response = await client.post(
+        "/api/v1/assistant/ask", json={"question": "¿Puedo devolver un producto?"}
+    )
+    assert response.status_code == 200
+    assert "30 días" in response.json()["answer"]
+    response = await client.post(
+        "/api/v1/assistant/ask", json={"question": "¿Hay garantía de cinco años?"}
+    )
+    assert response.status_code == 200
+    assert "No tengo información suficiente" in response.json()["answer"]
+
+
+async def test_real_fastapi_checkpointer_dependency(client, monkeypatch):
+    from app.core.config import settings
+    from app.graph.checkpointer import get_checkpointer
+    from app.main import app
+
+    monkeypatch.setattr(settings, "ai_provider", "demo")
+    app.dependency_overrides.pop(get_checkpointer)
+    response = await client.post(
+        "/api/v1/assistant/ask", json={"question": "¿Hay garantía de cinco años?"}
+    )
+    assert response.status_code == 200
+    assert "No tengo información suficiente" in response.json()["answer"]

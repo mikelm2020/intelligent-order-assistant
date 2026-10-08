@@ -18,6 +18,13 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "assistant_runs",
+        sa.CheckConstraint(
+            "action IN ('confirm', 'cancel')", name="ck_assistant_runs_action"
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending_approval', 'completed', 'rejected', 'failed')",
+            name="ck_assistant_runs_status",
+        ),
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("requested_by", sa.String(30), nullable=False),
         sa.Column("status", sa.String(30), nullable=False),

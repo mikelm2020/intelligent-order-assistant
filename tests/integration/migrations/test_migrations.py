@@ -28,6 +28,7 @@ async def test_migrations_upgrade_downgrade_and_upgrade(monkeypatch):
             text("SELECT version_num FROM alembic_version")
         )
         assert version == "20261007_assistant_runs"
+    await asyncio.to_thread(command.check, config)
     await asyncio.to_thread(command.downgrade, config, "base")
     await asyncio.to_thread(command.upgrade, config, "head")
     async with test_engine.begin() as connection:

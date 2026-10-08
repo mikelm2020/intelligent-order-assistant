@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -19,7 +19,9 @@ class RAGQuestionRequest(BaseModel):
 class RAGAnswerResponse(BaseModel):
     answer: str
     run_id: UUID | None = None
-    status: str = "completed"
+    status: Literal[
+        "completed", "pending_approval", "rejected", "failed", "expired"
+    ] = "completed"
     approval: dict[str, Any] | None = None
 
 

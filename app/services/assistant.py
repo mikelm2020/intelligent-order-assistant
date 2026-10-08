@@ -73,7 +73,10 @@ class AssistantService:
         return RAGAnswerResponse(
             answer=run.answer or "La acción requiere aprobación de un revisor.",
             run_id=run.id,
-            status=run.status,
+            status="expired"
+            if run.status == "pending_approval"
+            and run.expires_at <= datetime.now(timezone.utc)
+            else run.status,
             approval=run.preview,
         )
 
