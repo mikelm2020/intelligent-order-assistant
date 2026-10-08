@@ -2,7 +2,7 @@
 
 Fecha de última actualización: 2026-10-08 (America/Mexico_City).
 Rama: `feature/langgraph-orchestration`.
-HEAD: `cfba253`.
+HEAD al comenzar la reanudación: `cfba253` (consultar Git para el HEAD actual).
 
 Desarrollo reanudado por solicitud del usuario el 2026-10-08. Se conservaron los
 cambios existentes y se continuó el cierre de Docker, CI y documentación.
@@ -23,7 +23,22 @@ CI; documentación y estado. La integración y la demostración se harán despu�
 en secuencia y exclusivamente contra testing.
 
 Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
-`b60d0bf` (CI). Documentación revisada se registra en un cuarto commit.
+`b60d0bf` (CI), `fb56eab` (documentación).
+
+## Fase 2: suite completa y build actual (2026-10-08)
+
+- Se verificaron la URL efectiva y `current_database()` antes de la suite:
+  `localhost:5434/intelligent_order_assistant_test`, PostgreSQL **17.11**.
+- `poetry run pytest -q -x --tb=short`, con `TEST_DATABASE_URL` y `DATABASE_URL`
+  fijados explícitamente a ese destino: **156 passed en 22.55 s**. Incluye el
+  round trip de migraciones y `alembic check`; proveedores de IA simulados.
+- `docker build -t intelligent-order-assistant:validation-20261008 .`: correcto,
+  imagen `a5a18f53ceb2`. Buildx sigue ausente; el builder clásico completó el build.
+- No se afectaron contenedores de desarrollo ni otros proyectos. Suite finalizada
+  antes de iniciar la demostración.
+- Se prepara `compose.testing.yaml` para verificar el stack completo con una base
+  efímera llamada `intelligent_order_assistant_test`, sin volumen persistente y
+  sin publicar PostgreSQL. El API usará un puerto dedicado en localhost.
 
 ## Trabajo realizado al reanudar (2026-10-08)
 
