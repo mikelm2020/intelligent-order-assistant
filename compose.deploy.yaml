@@ -1,0 +1,55 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    environment:
+      POSTGRES_DB: intelligent_orders
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - deployment_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d intelligent_orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    image: intelligent-order-assistant:local
+    environment: &app_environment
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/intelligent_orders
+      OPERATOR_API_KEY: ${OPERATOR_API_KEY:?Set OPERATOR_API_KEY}
+      REVIEWER_API_KEY: ${REVIEWER_API_KEY:?Set REVIEWER_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-demo}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-5.6-luna}
+      RAG_MAX_DISTANCE: ${RAG_MAX_DISTANCE:-0.4}
+      APPROVAL_TTL_SECONDS: ${APPROVAL_TTL_SECONDS:-900}
+    command: ["python", "-m", "scripts.initialize_database"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: intelligent-order-assistant:local
+    environment: *app_environment
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  deployment_data:
