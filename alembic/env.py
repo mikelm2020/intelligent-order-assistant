@@ -13,7 +13,8 @@ config = context.config
 
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url,
+    # ConfigParser treats percent signs as interpolation, including URL escapes.
+    settings.database_url.replace("%", "%%"),
 )
 
 target_metadata = Base.metadata
