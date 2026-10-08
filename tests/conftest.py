@@ -2,6 +2,8 @@ import os
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
@@ -11,7 +13,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.graph.checkpointer import checkpoint_conn_string, get_checkpointer
 from app.main import app
 from app.models.base import Base
 
@@ -36,9 +40,9 @@ def validate_test_database_url(url: str) -> None:
 validate_test_database_url(TEST_DATABASE_URL)
 
 # Ensure unit tests never need a real OpenAI key. No requests use this dummy key.
-from app.core.config import settings
-
 settings.openai_api_key = "test-only-not-a-real-key"
+settings.operator_api_key = SecretStr("test-operator-key-00000000000000000")
+settings.reviewer_api_key = SecretStr("test-reviewer-key-00000000000000000")
 
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
@@ -59,6 +63,16 @@ async def prepare_database(request):
     ):
         yield
         return
+
+    async with AsyncPostgresSaver.from_conn_string(
+        checkpoint_conn_string(TEST_DATABASE_URL)
+    ) as saver:
+        async with saver.conn.cursor() as cursor:
+            await cursor.execute("SELECT current_database()")
+            actual = (await cursor.fetchone())["current_database"]
+            if actual != "intelligent_order_assistant_test":
+                raise RuntimeError("Unexpected checkpoint database")
+        await saver.setup()
 
     async with test_engine.begin() as connection:
         actual = await connection.scalar(text("SELECT current_database()"))
@@ -88,13 +102,23 @@ async def client(prepare_database):
         async with TestSessionFactory() as db_session:
             yield db_session
 
+    async def override_checkpointer():
+        async with AsyncPostgresSaver.from_conn_string(
+            checkpoint_conn_string(TEST_DATABASE_URL)
+        ) as saver:
+            yield saver
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_checkpointer] = override_checkpointer
 
     transport = ASGITransport(app=app)
 
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
+        headers={
+            "Authorization": "Bearer " + settings.operator_api_key.get_secret_value()
+        },
     ) as client:
         yield client
 

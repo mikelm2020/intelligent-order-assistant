@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.error_handlers import handle_order_error
 from app.core.database import SessionDep
+from app.core.security import ReviewerDep
 from app.exceptions.order import (
     OrderError,
 )
@@ -67,6 +68,7 @@ async def list_orders(
     response_model=OrderResponse,
 )
 async def cancel_order(
+    reviewer: ReviewerDep,
     order_id: int,
     session: SessionDep,
 ) -> OrderResponse:
@@ -84,6 +86,7 @@ async def cancel_order(
     response_model=OrderResponse,
 )
 async def confirm_order(
+    reviewer: ReviewerDep,
     order_id: int,
     session: SessionDep,
 ) -> OrderResponse:

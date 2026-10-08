@@ -81,7 +81,6 @@ async def test_router_node_routes_knowledge_question() -> None:
         ("Quiero consultar mi pedido", None, "lookup"),
         ("Quiero confirmar mi orden", None, "confirm"),
         ("Quiero cancelar mi pedido", None, "cancel"),
-        ("Confirmar o cancelar la orden 15", 15, "cancel"),
     ],
 )
 async def test_router_node_detects_order_action(
@@ -202,3 +201,19 @@ async def test_order_node_returns_order_summary() -> None:
 
     order_service.get_order.assert_awaited_once_with(15)
     assert result == {"answer": "Orden 15: estado pending, total $1250.50."}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "question", ["Confirmar o cancelar la orden 15", "No quiero cancelar la orden 15"]
+)
+async def test_router_rejects_ambiguous_or_negative_actions(question):
+    result = await RouterNode()({"question": question})
+    assert result["routing_error"]
+
+
+@pytest.mark.asyncio
+async def test_shipping_question_is_knowledge():
+    result = await RouterNode()({"question": "¿Cuánto tarda en llegar mi pedido?"})
+    assert result["intent"] == "knowledge"
+    assert result["order_action"] is None

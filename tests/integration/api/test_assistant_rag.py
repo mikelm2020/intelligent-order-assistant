@@ -3,8 +3,10 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.chat_factory import get_chat_provider
-from app.ai.factory import get_embedding_provider
+from app.api.v1.assistant import get_assistant_chat_provider as get_chat_provider
+from app.api.v1.assistant import (
+    get_assistant_embedding_provider as get_embedding_provider,
+)
 from app.main import app
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
