@@ -24,10 +24,12 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
    health/readiness, errores sanitizados, Docker sin privilegios y Compose separado
    de desarrollo. PostgreSQL 17/pgvector fijado por digest en despliegue y CI.
    El workflow define Ruff, suite y build; su ejecución remota está pendiente.
-5. **Documentación — revisada; entrega Git pendiente de autorización.** README y
-   AGENTS alineados al código; evidencia y límites actualizados. Los archivos de
-   Docker/CI/documentación permanecen sin commit. El stack Compose completo no
-   se ha levantado; la validación Docker utilizó la base exclusiva de testing.
+5. **Documentación y entrega local — registrada en commits; validación final en curso.**
+   README y AGENTS alineados al código; evidencia y límites actualizados. Los
+   archivos pendientes de Docker/CI/documentación se registraron en commits
+   locales. El stack Compose completo se verificó con el override de testing;
+   la decisión concreta de la demo actual espera autorización tras un rechazo
+   de revisión automática. No se hizo push.
 
 ## Decisiones
 
@@ -62,8 +64,22 @@ CI y un contenedor reproducible. No incluye publicar la rama ni desplegar en clo
   de inicialización con mocks: orden migraciones/checkpoints y propagación de fallos.
 - 2026-10-08: Ruff check y Ruff format sin errores (117 archivos); `git diff --check`
   sin errores. Compose de despliegue validado con valores ficticios y sin iniciarlo.
-- El digest PostgreSQL se verificó mediante inspección de la imagen local; no se
-  reconstruyó la imagen de aplicación ni se repitió integración al reanudar.
+- Reanudación autónoma posterior: destino efectivo verificado en
+  `localhost:5434/intelligent_order_assistant_test`, PostgreSQL 17.11.
+  `poetry run pytest -q -x --tb=short` → **156 passed en 22.55 s**, incluyendo
+  migraciones y `alembic check`. Unitarias/health → **76 passed en 0.84 s**.
+- Build actual: `intelligent-order-assistant:validation-20261008`, imagen
+  `a5a18f53ceb2`; builder clásico, sin instalar Buildx.
+- Stack completo con `compose.deploy.yaml` + `compose.testing.yaml`, proyecto
+  `ioa-validation-20261008`: PostgreSQL efímero exclusivo de testing, destino
+  verificado antes de migrar, inicialización exit 0, API healthy en localhost:19841.
+  Verificados RAG/fallback, consulta, pausa, health/readiness, 401, UID 10001,
+  filesystem de solo lectura, sin capabilities ni `.env` y checkpoint tras
+  reinicio del API. La orden sintética permanece pendiente con stock 8.
+- La revisión automática rechazó ejecutar la decisión de cancelación concreta
+  de esta demo sin autorización específica. La aprobación/replay en la suite
+  pasó, y existe evidencia del smoke anterior; la decisión del smoke actual
+  no se ejecutó y no se contabiliza como verificada.
 - Ninguna llamada real a OpenAI ni migración sobre datos de desarrollo/producción.
 - GitHub Actions remoto y despliegue público permanecen sin ejecutar.
 

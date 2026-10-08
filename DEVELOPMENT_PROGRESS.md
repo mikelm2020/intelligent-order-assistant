@@ -40,6 +40,41 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
   efímera llamada `intelligent_order_assistant_test`, sin volumen persistente y
   sin publicar PostgreSQL. El API usará un puerto dedicado en localhost.
 
+## Fase 3: stack completo y demo offline (2026-10-08)
+
+- Override `compose.testing.yaml`: base efímera `intelligent_order_assistant_test`,
+  sin volumen persistente ni puerto PostgreSQL publicado; API en localhost:19841,
+  proveedor demo y clave OpenAI vacía. Configuración combinada validada tanto
+  por Compose como por assertions de sus propiedades antes de iniciar servicios.
+- Proyecto separado `ioa-validation-20261008`, sin afectar los contenedores
+  existentes. Se inició primero `db` y se verificó `current_database()` antes
+  de ejecutar inicialización. La conexión del stack utiliza su red interna
+  `db:5432/intelligent_order_assistant_test`; no se ejecutó pytest en ese destino.
+- `up -d --no-build` completó PostgreSQL → inicialización → API. `migrate` terminó
+  con exit 0; revisión de solo lectura confirmó revisión Alembic
+  `20261007_assistant_runs` y diez migraciones del checkpointer.
+- `scripts.demo --prepare --allow-writes`, dentro del API: recuperación de
+  devoluciones, fallback sin información, consulta y solicitud pendiente.
+- Health/readiness OK, 401 sin credenciales, UID 10001, ausencia de `/app/.env`,
+  filesystem de solo lectura, `cap_drop=ALL`, `no-new-privileges=true`.
+- Se reinició exclusivamente `api`: healthy; solicitud y vista previa siguen
+  persistidas; orden 1 pendiente, total 51.00, stock 8. No hubo cancelación.
+- Revisión automática rechazó `scripts.demo --approve` para esa orden sintética:
+  requiere autorización de la acción concreta además de la autorización general
+  de integración. No se intentó ejecutarla indirectamente ni por otra vía.
+- Acción pendiente: cancelar orden sintética 1, solicitud
+  `2afffa8f-b620-4b49-a4d3-6442b6debdde`, exclusivamente en el stack efímero.
+  La decisión y su replay actuales no se presentan como comprobados. Los tests
+  automatizados de aprobación/replay sí forman parte de la suite de 156 casos.
+- El stack efímero permanece activo para permitir esa decisión. Configuración
+  temporal con claves exclusivas de testing en un archivo de permisos 0600 bajo
+  `/tmp/ioa-validation-20261008-gloatt4_`; nunca incorporada a Git ni mostrada.
+- README y plan actualizados con instrucciones reproducibles del stack de testing
+  y con la distinción entre evidencia histórica, suite actual y decisión pendiente.
+- Cierre de fase: Ruff check y formato conformes (117 archivos),
+  `git diff --check` sin errores. Solo configuración/documentación cambió después
+  de la suite; no se repitieron tests sin nuevos cambios de Python.
+
 ## Trabajo realizado al reanudar (2026-10-08)
 
 - Se leyeron AGENTS, este registro, diffs y archivos pendientes; no se repitieron
@@ -100,15 +135,15 @@ Commits de esta fase: `d5b71ac` (inicialización), `7428837` (Docker/Compose),
 ## Trabajo pendiente o incompleto
 
 - Docker, Compose de despliegue, CI, scripts de inicialización y documentación
-  están escritos, pero los archivos indicados abajo siguen sin commit.
-- `docs/implementation-plan.md`, README y AGENTS revisados conjuntamente con los
-  scripts y comandos de inicialización/despliegue al reanudar; siguen sin commit.
+  registrados en commits locales. La documentación de la nueva validación se
+  registra al cerrar esta fase.
 - PostgreSQL 17 está fijado en despliegue/CI con el digest verificado localmente:
   `pgvector/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f`.
   Python también está fijado por digest en Dockerfile.
-- El Compose de despliegue pasó validación de configuración, pero no se levantó
-  el stack completo de despliegue. La prueba Docker utilizó networking de host y
-  la base exclusiva de testing.
+- Stack completo verificado con el override efímero de testing. El Compose de
+  despliegue con datos persistentes de desarrollo/producción no se ejecutó.
+- La decisión concreta de la demo actual requiere autorización específica tras
+  rechazo automático; solicitud y stack permanecen pendientes.
 - GitHub Actions remoto, llamadas reales a OpenAI y despliegue público no se han
   ejecutado. No se hizo push.
 - Límites documentados: roles compartidos single-tenant, sin identidades personales
@@ -151,7 +186,8 @@ locales autorizados; ahora AGENTS contiene actualizaciones adicionales sin commi
 - `ef3661f` — `feat: add offline demo providers and deployment readiness checks`
 - `cfba253` — `fix: validate native checkpoint dependency and enforce approval invariants`
 
-No se realizaron commits después de la solicitud de detener el desarrollo.
+Los commits posteriores a la pausa se realizaron al recibir la autorización
+de reanudación: `d5b71ac`, `7428837`, `b60d0bf`, `fb56eab`, `391584c`.
 
 ## Últimas verificaciones reales
 
@@ -199,14 +235,14 @@ El contenedor temporal `ioa-portfolio-smoke-20261007` se detuvo y retiró al ter
 La base de testing quedó con esquema y registros sintéticos de la demo; no debe
 tratarse como datos reales. No se modificó `.env` ni se migró la base de desarrollo.
 
-## Próximos pasos que requieren autorización
+## Próximos pasos
 
-1. Si se autoriza iniciar el stack y sus migraciones, verificar el destino y usar
-   un proyecto separado, como `ioa-demo`, sin reemplazar desarrollo/testing.
-2. Si se autoriza repetir integración/evaluación, verificar URL y base efectiva
-   exclusivamente de testing. Suite y demo deben ejecutarse en secuencia.
-3. Con autorización específica, registrar los archivos restantes en commits
-   pequeños y revisables. No hacer push ni despliegue público sin autorización.
+1. Obtener autorización para la cancelación concreta descrita en la fase 3;
+   entonces verificar decisión, replay y stock restituido a 10, exclusivamente
+   dentro del stack efímero de testing. No repetir la suite mientras se usa esa base.
+2. Tras completar o descartar esa decisión, retirar únicamente el proyecto
+   `ioa-validation-20261008` y su archivo temporal de credenciales. No retirar
+   los contenedores existentes de desarrollo/testing ni otros proyectos.
+3. CI remoto, llamadas OpenAI y despliegue público permanecen fuera del alcance.
 
-El inventario anterior de archivos corresponde a la pausa. Al reanudar se agregó
-también `tests/unit/core/test_database_initialization.py`; no hay cambios staged.
+El inventario anterior de archivos corresponde a la pausa y es histórico.

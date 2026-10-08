@@ -174,7 +174,7 @@ Los proveedores OpenAI se simulan; no se hacen llamadas reales ni se usan claves
 reales. La evaluación de retrieval usa cinco casos y vectores sintéticos: no
 representa una evaluación de calidad de embeddings o respuestas de OpenAI.
 
-CI (`.github/workflows/ci.yml`) ejecuta lint, formato, suite y build Docker con una
+CI (`.github/workflows/ci.yml`) define lint, formato, suite y build Docker con una
 base PostgreSQL/pgvector efímera. Su ejecución remota requiere publicar la rama;
 la existencia del workflow no implica que GitHub Actions ya se haya ejecutado.
 
@@ -209,6 +209,42 @@ Para exposición pública, coloca un proxy TLS delante del API, restringe la red
 usa un gestor de secretos y configura backups de PostgreSQL. No hay despliegue
 cloud ni publicación automática. Las actualizaciones de las imágenes fijadas
 requieren revisar el nuevo digest y repetir las verificaciones correspondientes.
+
+### Validar el stack completo con datos de testing
+
+`compose.testing.yaml` se combina exclusivamente con `compose.deploy.yaml` y
+un nombre de proyecto separado. Fuerza `AI_PROVIDER=demo`, borra la clave OpenAI,
+usa la base `intelligent_order_assistant_test` en almacenamiento efímero y publica
+solo el API en `127.0.0.1:19841`. PostgreSQL no tiene puerto publicado ni volumen
+persistente. La suite pytest sigue usando su base independiente en `5434`.
+El override se verificó con Docker Compose 5.1.4; requiere soporte para las
+etiquetas de merge `!reset` y `!override`.
+
+En una misma sesión de shell, genera credenciales exclusivas para esta validación:
+
+```bash
+export DB_PASSWORD="$(openssl rand -hex 32)"
+export OPERATOR_API_KEY="$(openssl rand -hex 32)"
+export REVIEWER_API_KEY="$(openssl rand -hex 32)"
+export TEST_IMAGE=intelligent-order-assistant:testing
+docker build -t "$TEST_IMAGE" .
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml config --quiet
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml up -d --wait db
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml exec -T db psql -U postgres -d intelligent_order_assistant_test -Atc 'SELECT current_database();'
+# Continúa solo si devuelve intelligent_order_assistant_test.
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml up -d --no-build
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml exec -T api python -m scripts.demo --prepare --allow-writes
+```
+
+Revisa la vista previa antes de aprobar o rechazar. Ejecuta el script de decisión
+en el contenedor `api`, en un paso separado. Reiniciar únicamente `api` permite
+comprobar que la solicitud persiste. Reiniciar o retirar `db` pierde los datos
+de testing, incluidos los checkpoints. Para terminar y retirar este stack:
+
+```bash
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml down
+unset DB_PASSWORD OPERATOR_API_KEY REVIEWER_API_KEY TEST_IMAGE
+```
 
 ## Límites y trabajo futuro
 

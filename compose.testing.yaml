@@ -1,0 +1,30 @@
+# Override for validating the complete deployment stack with disposable test data.
+# Always use a separate project name; never combine this with compose.yaml.
+services:
+  db:
+    environment:
+      POSTGRES_DB: intelligent_order_assistant_test
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d intelligent_order_assistant_test"]
+    restart: "no"
+
+  migrate:
+    build: !reset null
+    image: ${TEST_IMAGE:-intelligent-order-assistant:local}
+    environment: &testing_environment
+      ENVIRONMENT: testing
+      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/intelligent_order_assistant_test
+      AI_PROVIDER: demo
+      OPENAI_API_KEY: ""
+
+  api:
+    image: ${TEST_IMAGE:-intelligent-order-assistant:local}
+    environment: *testing_environment
+    ports: !override
+      - "127.0.0.1:19841:8000"
+    restart: "no"
+
+volumes: !reset {}
