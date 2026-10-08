@@ -14,12 +14,16 @@ pydantic-settings = "*"
 email-validator = "^2.3.0"
 pgvector = "^0.5.0"
 openai = "^3.9.0"
+langgraph = "^1.2.12"
+langgraph-checkpoint-postgres = "^3.1.2"
+psycopg = {extras = ["binary"], version = "^3.3.6"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1"
 pytest-asyncio = "^1.4"
 httpx2 = "*"
 ruff = "*"
+httpx = "^0.28.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

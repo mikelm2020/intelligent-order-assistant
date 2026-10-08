@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from httpx import AsyncClient
 
+REVIEWER_HEADERS = {"Authorization": "Bearer test-reviewer-key-00000000000000000"}
+
 
 async def create_customer(client: AsyncClient) -> dict:
     response = await client.post(
@@ -401,7 +403,9 @@ async def test_cancel_order_restores_product_stock(
     product_response = await client.get(f"/api/v1/products/{product['id']}")
     assert product_response.json()["stock"] == 7
 
-    cancel_response = await client.post(f"/api/v1/orders/{order['id']}/cancel")
+    cancel_response = await client.post(
+        f"/api/v1/orders/{order['id']}/cancel", headers=REVIEWER_HEADERS
+    )
 
     assert cancel_response.status_code == 200
     assert cancel_response.json()["status"] == "cancelled"
@@ -451,7 +455,9 @@ async def test_cancel_order_restores_stock_for_multiple_products(
 
     order_id = create_response.json()["id"]
 
-    cancel_response = await client.post(f"/api/v1/orders/{order_id}/cancel")
+    cancel_response = await client.post(
+        f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS
+    )
 
     assert cancel_response.status_code == 200
     assert cancel_response.json()["status"] == "cancelled"
@@ -466,7 +472,7 @@ async def test_cancel_order_restores_stock_for_multiple_products(
 async def test_cancel_nonexistent_order_returns_404(
     client: AsyncClient,
 ) -> None:
-    response = await client.post("/api/v1/orders/9999/cancel")
+    response = await client.post("/api/v1/orders/9999/cancel", headers=REVIEWER_HEADERS)
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Order not found"
@@ -495,11 +501,15 @@ async def test_cancel_already_cancelled_order_returns_409(
 
     order_id = create_response.json()["id"]
 
-    first_cancel = await client.post(f"/api/v1/orders/{order_id}/cancel")
+    first_cancel = await client.post(
+        f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS
+    )
 
     assert first_cancel.status_code == 200
 
-    second_cancel = await client.post(f"/api/v1/orders/{order_id}/cancel")
+    second_cancel = await client.post(
+        f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS
+    )
 
     assert second_cancel.status_code == 409
     assert second_cancel.json()["detail"] == "Order is already cancelled"
@@ -528,7 +538,9 @@ async def test_confirm_order(
 
     order_id = create_response.json()["id"]
 
-    response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+    response = await client.post(
+        f"/api/v1/orders/{order_id}/confirm", headers=REVIEWER_HEADERS
+    )
 
     assert response.status_code == 200
     assert response.json()["status"] == "confirmed"
@@ -537,7 +549,9 @@ async def test_confirm_order(
 async def test_confirm_nonexistent_order_returns_404(
     client: AsyncClient,
 ) -> None:
-    response = await client.post("/api/v1/orders/9999/confirm")
+    response = await client.post(
+        "/api/v1/orders/9999/confirm", headers=REVIEWER_HEADERS
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Order not found"
@@ -564,10 +578,14 @@ async def test_confirm_already_confirmed_order_returns_409(
 
     order_id = create_response.json()["id"]
 
-    first_response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+    first_response = await client.post(
+        f"/api/v1/orders/{order_id}/confirm", headers=REVIEWER_HEADERS
+    )
     assert first_response.status_code == 200
 
-    second_response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+    second_response = await client.post(
+        f"/api/v1/orders/{order_id}/confirm", headers=REVIEWER_HEADERS
+    )
 
     assert second_response.status_code == 409
     assert second_response.json()["detail"] == "Order is already confirmed"
@@ -594,12 +612,58 @@ async def test_confirm_cancelled_order_returns_409(
 
     order_id = create_response.json()["id"]
 
-    cancel_response = await client.post(f"/api/v1/orders/{order_id}/cancel")
+    cancel_response = await client.post(
+        f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS
+    )
     assert cancel_response.status_code == 200
 
-    response = await client.post(f"/api/v1/orders/{order_id}/confirm")
+    response = await client.post(
+        f"/api/v1/orders/{order_id}/confirm", headers=REVIEWER_HEADERS
+    )
 
     assert response.status_code == 409
     assert (
         response.json()["detail"] == "Order with status 'cancelled' cannot be confirmed"
     )
+
+
+async def test_concurrent_cancellations_restore_stock_once(client):
+    customer = await create_customer(client)
+    product = await create_product(client, stock=10)
+    created = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [{"product_id": product["id"], "quantity": 3}],
+        },
+    )
+    order_id = created.json()["id"]
+    responses = await asyncio.gather(
+        *[
+            client.post(f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS)
+            for _ in range(2)
+        ]
+    )
+    assert sorted(r.status_code for r in responses) == [200, 409]
+    assert (await client.get(f"/api/v1/products/{product['id']}")).json()["stock"] == 10
+
+
+async def test_concurrent_confirm_cancel_has_one_winner(client):
+    customer = await create_customer(client)
+    product = await create_product(client, stock=10)
+    created = await client.post(
+        "/api/v1/orders",
+        json={
+            "customer_id": customer["id"],
+            "items": [{"product_id": product["id"], "quantity": 3}],
+        },
+    )
+    order_id = created.json()["id"]
+    responses = await asyncio.gather(
+        client.post(f"/api/v1/orders/{order_id}/confirm", headers=REVIEWER_HEADERS),
+        client.post(f"/api/v1/orders/{order_id}/cancel", headers=REVIEWER_HEADERS),
+    )
+    assert sorted(r.status_code for r in responses) == [200, 409]
+    order = (await client.get(f"/api/v1/orders/{order_id}")).json()
+    stock = (await client.get(f"/api/v1/products/{product['id']}")).json()["stock"]
+    assert stock == (10 if order["status"] == "cancelled" else 7)

@@ -51,7 +51,12 @@ class ProductRepository:
         self,
         product_id: int,
     ) -> Product | None:
-        statement = select(Product).where(Product.id == product_id).with_for_update()
+        statement = (
+            select(Product)
+            .where(Product.id == product_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
 
         result = await self.session.scalars(statement)
 

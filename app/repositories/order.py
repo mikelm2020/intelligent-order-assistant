@@ -61,6 +61,16 @@ class OrderRepository:
 
         return result.first()
 
+    async def get_by_id_for_update(self, order_id: int) -> Order | None:
+        statement = (
+            select(Order)
+            .options(selectinload(Order.items))
+            .where(Order.id == order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return await self.session.scalar(statement)
+
     async def list(self) -> list[Order]:
         statement = select(Order).options(selectinload(Order.items)).order_by(Order.id)
 

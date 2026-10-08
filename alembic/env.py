@@ -4,6 +4,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.models  # noqa: F401 -- register every model for metadata/autogeneration
 from alembic import context
 from app.core.config import settings
 from app.models.base import Base
@@ -12,10 +13,25 @@ config = context.config
 
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url,
+    # ConfigParser treats percent signs as interpolation, including URL escapes.
+    settings.database_url.replace("%", "%%"),
 )
 
 target_metadata = Base.metadata
+
+
+CHECKPOINT_TABLES = {
+    "checkpoint_migrations",
+    "checkpoints",
+    "checkpoint_blobs",
+    "checkpoint_writes",
+}
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    # The official checkpointer owns these tables; Alembic must never propose
+    # dropping them during business-schema autogeneration.
+    return not (type_ == "table" and name in CHECKPOINT_TABLES)
 
 
 def run_migrations_offline() -> None:
@@ -35,6 +51,7 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
+        include_object=include_object,
         dialect_opts={"paramstyle": "named"},
     )
 
@@ -43,7 +60,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

@@ -1,15 +1,16 @@
 from openai import AsyncOpenAI
 
 from app.core.config import settings
+from app.exceptions.ai import AIConfigurationError
 
 
 class OpenAIChatProvider:
     def __init__(self) -> None:
         if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            raise AIConfigurationError("AI provider credentials are not configured")
 
         self.client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
+            api_key=settings.openai_api_key.get_secret_value(),
         )
 
         self.model = settings.openai_chat_model

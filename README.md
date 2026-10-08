@@ -1,451 +1,534 @@
 # Intelligent Order Assistant
 
-AI-ready backend for intelligent e-commerce order management, built with FastAPI, PostgreSQL, SQLAlchemy and OpenAI.
+Backend asíncrono para gestionar pedidos y consultar documentación de un comercio,
+con **FastAPI, PostgreSQL/pgvector y LangGraph**. Integra operaciones transaccionales
+de inventario con un asistente que recupera información y prepara acciones de
+pedidos para revisión humana antes de ejecutarlas.
 
-The project combines a transactional order-management API with a Retrieval-Augmented Generation (RAG) pipeline capable of ingesting documentation, generating embeddings, performing semantic search with pgvector, and answering questions using only relevant retrieved context.
+El proyecto aborda dos necesidades: mantener pedidos, precios e inventario
+consistentes ante errores o solicitudes concurrentes, y ofrecer asistencia sobre
+políticas comerciales sin convertir una pregunta en autorización para modificar
+un pedido. Como proyecto de portafolio Backend Python, muestra separación de
+capas, contratos HTTP, persistencia asíncrona, pruebas de concurrencia y un flujo
+HITL (*human in the loop*) persistente y recuperable.
 
-## Features
+**Estado:** las cinco fases del [plan de implementación](docs/implementation-plan.md)
+están completadas y verificadas localmente. GitHub Actions pasó también en remoto.
+Las llamadas reales a OpenAI y el despliegue público siguen pendientes.
 
-### Order Management
+## Características implementadas
 
-- Customer CRUD operations.
-- Product CRUD operations.
-- Transactional order creation.
-- Inventory validation and stock management.
-- Row-level locking to protect inventory during concurrent operations.
-- Server-side price and order total calculation.
-- Order confirmation and cancellation workflows.
-- Automatic stock restoration when an order is cancelled.
-- Business rules preventing invalid deletions and order transitions.
-- Centralized domain error handling.
+- CRUD de clientes y productos, validación Pydantic y restricciones de eliminación
+  cuando existen pedidos asociados.
+- Creación de pedidos con reserva de stock, rechazo de productos inactivos o sin
+  existencias, y precios, subtotales y totales calculados en el servidor con `Decimal`.
+- Transiciones `pending → confirmed` y `pending → cancelled`. La cancelación
+  restituye inventario; una orden confirmada ya no puede cancelarse con este flujo.
+- Transacciones con rollback, bloqueo de filas de órdenes/productos y adquisición
+  de bloqueos de productos en orden consistente.
+- Ingestión de texto con fragmentos de 1000 caracteres y solapamiento de 200;
+  almacenamiento de embeddings de 1536 dimensiones y búsqueda por distancia coseno.
+- RAG con umbral controlado por el servidor. Sin fragmentos suficientemente
+  relevantes, devuelve un fallback y no invoca al proveedor de chat.
+- Routing determinístico de preguntas documentales, consultas y solicitudes de
+  confirmación/cancelación mediante LangGraph.
+- Aprobación o rechazo separado de la solicitud, vista previa persistida,
+  caducidad y validación de cambios en la orden antes de ejecutar.
+- Checkpoints PostgreSQL y recibo de ejecución confirmado junto con la acción:
+  repetir una decisión completada devuelve el resultado sin repetir el inventario.
+- Credenciales Bearer distintas para operador y revisor, endpoints de salud,
+  demo offline, migraciones Alembic, pruebas y workflow de CI.
 
-### AI & RAG
+## Arquitectura y flujo del asistente
 
-- Document ingestion and automatic chunking.
-- OpenAI embeddings.
-- Vector storage with PostgreSQL + pgvector.
-- Semantic document search using cosine distance.
-- Configurable relevance threshold.
-- Retrieval-Augmented Generation pipeline.
-- OpenAI-powered answers grounded in retrieved documentation.
-- Safe fallback when no sufficiently relevant context is found.
-- Chat model is not called when retrieval does not meet the relevance threshold.
-- Provider abstractions for embedding and chat implementations.
-
-### Quality
-
-- Async application architecture.
-- Repository and service layers.
-- Alembic database migrations.
-- Separate development and test databases.
-- Unit tests.
-- Integration tests.
-- RAG retrieval evaluation tests.
-- **87 automated tests currently passing.**
-
-## Architecture
-
-The application follows a layered architecture that separates HTTP concerns, business logic, persistence and AI providers.
-
-```text
-Client
-  |
-  v
-FastAPI Routers
-  |
-  v
-Services
-  |
-  +--------------------+
-  |                    |
-  v                    v
-Repositories       AI Providers
-  |               /            \
-  v              v              v
-PostgreSQL    Embeddings       Chat
-+ pgvector      OpenAI         OpenAI
+```mermaid
+flowchart TD
+    Client[Cliente HTTP] --> API[FastAPI: routers y autenticación]
+    API --> Services[Servicios de clientes, productos y documentos]
+    API --> Assistant[AssistantService]
+    Assistant --> Router[LangGraph: RouterNode]
+    Router -->|Conocimiento| RAG[RAGNode / RAGService]
+    RAG --> Retrieval[DocumentRetrievalService]
+    Retrieval --> Embeddings[Proveedor de embeddings]
+    Retrieval --> Repo[Repositorios / SQLAlchemy async]
+    RAG -->|Contexto relevante| Chat[Proveedor de chat]
+    RAG -->|Sin contexto relevante| Fallback[Respuesta de información insuficiente]
+    Router -->|Pedidos| OrderNode[OrderNode / consulta y vista previa]
+    OrderNode --> Orders[OrderService]
+    OrderNode -->|Acción válida en orden pendiente| Pause[ApprovalNode: interrupt]
+    Pause <--> Checkpoints[Checkpointer PostgreSQL]
+    Reviewer[Revisor: decisión HTTP] --> Assistant
+    Assistant -->|Command resume| Pause
+    Pause -->|Aprobada| Execute[Ejecutor de acción de AssistantService]
+    Execute --> Orders
+    Orders --> Repo
+    Services --> Repo
+    Repo --> DB[(PostgreSQL + pgvector)]
+    Checkpoints --> DB
 ```
 
-Main responsibilities:
+Los routers validan entradas y traducen errores; los servicios concentran las
+reglas de negocio y las transacciones. Los nodos reutilizan esos servicios.
+Embeddings y chat se consumen mediante interfaces intercambiables, con proveedores
+OpenAI o demo. PostgreSQL almacena negocio, solicitudes, recibos y checkpoints;
+no se necesitan Redis ni RabbitMQ para el alcance actual.
 
-- **API layer** — HTTP endpoints, request/response schemas and error translation.
-- **Service layer** — business rules, transactional workflows, document ingestion, retrieval and RAG orchestration.
-- **Repository layer** — database access and persistence.
-- **AI provider layer** — abstractions for embedding and chat providers.
-- **PostgreSQL + pgvector** — transactional data and vector similarity search.
+### RAG
 
-## Tech Stack
+1. `POST /api/v1/documents` fragmenta el texto, genera embeddings y los persiste.
+2. `POST /api/v1/assistant/ask` envía la pregunta al router del grafo.
+3. Para conocimiento, se genera un embedding de consulta y se recuperan hasta
+   `limit` fragmentos; se conservan los de distancia `<= RAG_MAX_DISTANCE`.
+4. Con contexto relevante, se concatenan los fragmentos y se invoca al chat con
+   instrucciones para responder en español usando ese contexto.
+5. Sin contexto relevante, se responde:
 
-- Python 3.12+
-- FastAPI
-- Uvicorn
-- SQLAlchemy 2.x (async)
-- asyncpg
-- PostgreSQL
-- pgvector
-- Alembic
-- Pydantic Settings
-- OpenAI API
-- Docker Compose
-- Poetry
-- pytest
-- pytest-asyncio
-- Ruff
+   > No tengo información suficiente en la documentación disponible para responder esa pregunta.
 
-## RAG Pipeline
+El endpoint acepta `limit` de 1 a 20 (predeterminado 5). El cliente no controla
+`max_distance`; el servidor lo propaga desde configuración al grafo y servicios.
+`/documents/search` ofrece búsqueda por similitud **sin aplicar ese umbral** y
+responde con los fragmentos, sin invocar al chat.
 
-The assistant uses a Retrieval-Augmented Generation workflow:
+### Pedidos y aprobación humana
 
-```text
-Document
-   |
-   v
-Chunking
-   |
-   v
-OpenAI Embeddings
-   |
-   v
-PostgreSQL + pgvector
-   |
-   v
-Semantic Retrieval
-   |
-   v
-Relevance Filtering
-   |
-   +---- no relevant context ----> Safe fallback
-   |
-   v
-OpenAI Chat Model
-   |
-   v
-Grounded Answer
-```
+Una consulta como `Consulta la orden 15` solo lee. `Cancelar la orden 15` o
+`Confirmar el pedido 15` crea una solicitud si la orden sigue pendiente. Los casos
+sin ID, las acciones contradictorias y las negaciones detectadas piden aclaración.
 
-Documents are split into chunks and converted into embeddings using the configured OpenAI embedding model.
+El grafo se pausa con `interrupt()`. La respuesta contiene un `run_id` y una vista
+previa con acción, orden, estado, total y `updated_at`. Un revisor inspecciona esa
+vista y envía `{"approve": true}` o `{"approve": false}` en otro endpoint.
+`AssistantService` reanuda el grafo con `Command(resume=...)`.
 
-When a user asks a question:
+La solicitud caduca. Si el estado o `updated_at` de la orden cambiaron, la ejecución
+se invalida y requiere otra solicitud. Las reanudaciones se serializan mediante
+un advisory lock PostgreSQL. El recibo y la acción se confirman en una transacción,
+protegiendo el inventario ante reintentos después de perder la respuesta.
 
-1. The question is converted into an embedding.
-2. pgvector performs semantic similarity search.
-3. Retrieved chunks are filtered using a cosine-distance relevance threshold.
-4. If relevant context exists, it is passed to the chat provider.
-5. If no context satisfies the threshold, the application returns a safe fallback without calling the chat model.
+## Tecnologías y estructura
 
-The default threshold is:
+| Área | Tecnologías |
+| --- | --- |
+| API y validación | Python, FastAPI, Pydantic, Uvicorn |
+| Persistencia | SQLAlchemy 2 async, asyncpg, PostgreSQL 17, pgvector, Alembic |
+| Orquestación e IA | LangGraph, checkpointer PostgreSQL con psycopg, SDK OpenAI |
+| Calidad | pytest, pytest-asyncio, HTTPX, fakes/mocks, Ruff |
+| Entorno y entrega | Poetry, `poetry.lock`, Docker, Compose, GitHub Actions |
 
-```env
-RAG_MAX_DISTANCE=0.4
-```
+| Ruta | Responsabilidad |
+| --- | --- |
+| `app/api/` | Endpoints, dependencias y errores HTTP |
+| `app/services/` | Negocio, transacciones, ingestión, recuperación y asistente |
+| `app/repositories/` | Acceso a datos y consultas SQLAlchemy |
+| `app/models/`, `app/schemas/` | Entidades persistidas y contratos Pydantic |
+| `app/graph/` | Estado, nodos, routing y checkpointer |
+| `app/ai/` | Interfaces, factories y proveedores de embeddings/chat |
+| `app/core/` | Configuración, sesiones y credenciales |
+| `alembic/`, `scripts/` | Migraciones, inicialización y demo |
+| `tests/` | Unitarias, integración y evaluación de retrieval |
 
-This value is configurable and was selected based on retrieval evaluation cases included in the test suite. It is a project-specific threshold rather than a universal similarity value.
+## Requisitos
 
-## Transactional Order Processing
+- Python **3.12** recomendado; `pyproject.toml` declara compatibilidad `^3.12`.
+- Poetry **2.4.1**, versión utilizada en Docker y CI.
+- Docker y Compose para PostgreSQL y ejecución en contenedores.
+- Para `compose.testing.yaml`, Compose con soporte de `!reset` y `!override`;
+  el stack se verificó con Compose **5.1.4**.
+- `curl` para los ejemplos HTTP y OpenSSL para generar credenciales.
+- Clave OpenAI únicamente si eliges el proveedor `openai`; la demo es offline.
 
-Order creation is handled as a transactional workflow.
+Los comandos siguientes se ejecutan desde la raíz del repositorio. Si ya tienes
+servicios usando los puertos indicados, elige un entorno aislado antes de iniciar
+contenedores. Los ejemplos escriben datos y esquema solo en las bases locales
+que configures; verifica el destino antes de ejecutarlos.
 
-The backend is responsible for:
-
-- Validating customers and products.
-- Validating requested quantities.
-- Locking inventory rows during order creation.
-- Checking available stock.
-- Deriving product prices on the server.
-- Calculating the final order total.
-- Decrementing stock atomically.
-- Restoring inventory when an order is cancelled.
-
-Inventory locking helps prevent concurrent requests from consuming the same available stock.
-
-## Project Structure
-
-```text
-app/
-├── ai/              # Embedding and chat provider abstractions
-├── api/             # FastAPI routers and HTTP error handling
-├── core/            # Configuration and database setup
-├── exceptions/      # Domain exceptions
-├── models/          # SQLAlchemy models
-├── repositories/    # Persistence layer
-├── schemas/         # Pydantic schemas
-└── services/        # Business logic and RAG orchestration
-
-alembic/
-└── versions/        # Database migrations
-
-docker/
-└── postgres_test/   # Test database initialization
-
-tests/
-├── evaluation/      # RAG retrieval evaluation
-├── fakes/           # Test providers
-├── integration/     # API, repository and service integration tests
-└── unit/            # Unit tests
-```
-
-## Requirements
-
-Before running the project, install:
-
-- Python 3.12+
-- Poetry
-- Docker
-- Docker Compose
-
-An OpenAI API key is required for real embedding and chat requests.
-
-## Installation
-
-Clone the repository:
+## Instalación y configuración
 
 ```bash
-git clone <repository-url>
-cd intelligent-order-assistant
+poetry install --no-root
+if [ ! -e .env ]; then cp .env.example .env; fi
 ```
 
-Install dependencies:
+No sobrescribas un `.env` existente. Edita ese archivo con tu configuración y
+conserva las credenciales fuera de Git. La aplicación carga variables del entorno
+y `.env`; las variables exportadas tienen prioridad. Genera por separado las
+claves de operador y revisor con `openssl rand -hex 32` y guarda cada valor en su
+variable correspondiente. No uses la misma clave para ambos roles.
+
+| Variable | Uso y valor de referencia |
+| --- | --- |
+| `APP_NAME` | Título del API; `Intelligent Order Assistant` |
+| `ENVIRONMENT` | Etiqueta del entorno; `development` por defecto; no valida el destino de la base |
+| `DATABASE_URL` | URL SQLAlchemy `postgresql+asyncpg://…`; obligatoria, local en `.env.example` |
+| `OPERATOR_API_KEY` | Credencial Bearer del operador, al menos 32 caracteres |
+| `REVIEWER_API_KEY` | Credencial Bearer distinta del revisor, al menos 32 caracteres |
+| `AI_PROVIDER` | `demo` u `openai`; `.env.example` usa `demo`, Settings por defecto usa `openai` |
+| `OPENAI_API_KEY` | Secreto necesario para solicitudes reales de embeddings/chat |
+| `OPENAI_EMBEDDING_MODEL` | Modelo configurable; ejemplo `text-embedding-3-small`; dimensiones solicitadas: 1536 |
+| `OPENAI_CHAT_MODEL` | Modelo configurable; valor del repositorio: `gpt-5.6-luna` |
+| `RAG_MAX_DISTANCE` | Distancia máxima aceptada por RAG; `0.4`, rango 0–2 |
+| `APPROVAL_TTL_SECONDS` | Vigencia positiva de solicitudes; `900` segundos por defecto |
+| `DB_PASSWORD` | Contraseña PostgreSQL del Compose de despliegue; usa un valor hexadecimal generado |
+| `TEST_DATABASE_URL` | Solo herramientas de testing; localhost/127.0.0.1:5434, base `intelligent_order_assistant_test` |
+
+Cambiar el modelo de embeddings requiere conservar compatibilidad con 1536
+dimensiones y revisar el corpus. Al cambiar entre demo y OpenAI, usa una base
+separada o reingesta los documentos; no mezcles sus embeddings. Los modelos
+configurados son valores del código, no una garantía de disponibilidad en tu cuenta.
+Las contraseñas con caracteres reservados deben codificarse en la URL; Alembic
+preserva esos escapes. La URL de conexión se omite de la representación de Settings.
+
+## Ejecución local
+
+Para un entorno de desarrollo nuevo, `.env.example` apunta a
+`localhost:5435/intelligent_orders` con las credenciales locales del Compose.
+Mantén `AI_PROVIDER=demo` para comenzar sin solicitudes externas.
 
 ```bash
-poetry install
+docker compose up -d db
+docker compose exec -T db pg_isready -U postgres -d intelligent_orders
 ```
 
-Create the environment file:
+Espera a que PostgreSQL acepte conexiones. Comprueba la configuración efectiva
+sin mostrar su contraseña y verifica la base del contenedor:
 
 ```bash
-cp .env.example .env
+poetry run python -c 'from app.core.config import settings; from sqlalchemy.engine import make_url; u = make_url(settings.database_url); print(u.host, u.port, u.database)'
+docker compose exec -T db psql -U postgres -d intelligent_orders -Atc 'SELECT current_database();'
 ```
 
-Then configure your OpenAI API key in `.env`:
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-```
-
-The default development configuration is:
-
-```env
-APP_NAME=Intelligent Order Assistant
-ENVIRONMENT=development
-
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/intelligent_orders
-
-OPENAI_API_KEY=
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_CHAT_MODEL=gpt-5.6-luna
-RAG_MAX_DISTANCE=0.4
-```
-
-> Never commit your real `.env` file or API key.
-
-## Database
-
-Start PostgreSQL with pgvector:
+Continúa solo si la URL efectiva corresponde a esa base local y autorizas la
+inicialización de su esquema:
 
 ```bash
-docker compose up -d
-```
-
-The development database is exposed on port `5433`.
-
-The isolated test database is exposed on port `5434`.
-
-Apply the database migrations:
-
-```bash
-poetry run alembic upgrade head
-```
-
-## Running the API
-
-Start the FastAPI development server:
-
-```bash
+poetry run python -m scripts.initialize_database
 poetry run uvicorn app.main:app --reload
 ```
 
-The API will be available at:
+La inicialización ejecuta Alembic hasta `head` y `AsyncPostgresSaver.setup()`.
+Las migraciones de negocio y las tablas del checkpointer tienen administradores
+separados; Alembic excluye esas tablas de su comparación de metadata. Iniciar el
+API o atender una petición no ejecuta migraciones automáticamente.
 
-```text
-http://127.0.0.1:8000
-```
+| URL | Uso |
+| --- | --- |
+| `http://127.0.0.1:8000/docs` | Swagger UI; botón Authorize para la credencial Bearer |
+| `http://127.0.0.1:8000/redoc` | Documentación de contratos |
+| `http://127.0.0.1:8000/openapi.json` | Esquema OpenAPI |
+| `http://127.0.0.1:8000/health` | Respuesta del proceso, sin verificar la base |
+| `http://127.0.0.1:8000/ready` | Conexión, tablas de solicitudes/checkpoints y credenciales configuradas |
 
-Health check:
+`/health` y `/ready` no requieren Bearer. Readiness no comprueba disponibilidad del
+proveedor de IA ni todos los objetos del esquema. Desarrollo expone PostgreSQL en
+`127.0.0.1:5435`; testing usa `127.0.0.1:5434`.
 
-```text
-GET /health
-```
+## Autenticación y endpoints
 
-Interactive Swagger documentation:
+Todas las rutas `/api/v1` requieren `Authorization: Bearer <clave>`.
+Operador y revisor pueden usar las rutas generales; las decisiones del asistente
+y la confirmación/cancelación directa requieren **revisor**. El sistema registra
+roles compartidos, no usuarios individuales: una solicitud originada por el rol
+revisor no puede ser decidida por ese mismo rol.
 
-```text
-http://127.0.0.1:8000/docs
-```
+| Método | Ruta | Función |
+| --- | --- | --- |
+| POST / GET | `/api/v1/customers` | Crear / listar clientes |
+| GET / PATCH / DELETE | `/api/v1/customers/{customer_id}` | Consultar / editar / eliminar |
+| POST / GET | `/api/v1/products` | Crear / listar productos |
+| GET / PATCH / DELETE | `/api/v1/products/{product_id}` | Consultar / editar / eliminar |
+| POST / GET | `/api/v1/orders` | Crear / listar pedidos |
+| GET | `/api/v1/orders/{order_id}` | Consultar pedido con sus partidas |
+| POST | `/api/v1/orders/{order_id}/confirm` | Confirmar; exclusivo de revisor |
+| POST | `/api/v1/orders/{order_id}/cancel` | Cancelar; exclusivo de revisor |
+| POST | `/api/v1/documents` | Ingestar título, contenido y fuente opcional |
+| POST | `/api/v1/documents/search` | Buscar fragmentos con `query` y `limit` |
+| POST | `/api/v1/assistant/ask` | Preguntar con `question` y `limit` |
+| GET | `/api/v1/assistant/runs/{run_id}` | Revisar solicitud o resultado persistido |
+| POST | `/api/v1/assistant/runs/{run_id}/decision` | Aprobar/rechazar; exclusivo de revisor |
 
-## API Endpoints
+Los POST directos de confirmación/cancelación son comandos explícitos del revisor,
+sin crear una solicitud HITL. El asistente siempre utiliza pausa y decisión.
+Los errores incluyen 401 por credenciales inválidas, 403 por rol/aprobación propia,
+404 por recurso inexistente, 409 por conflictos, 410 por aprobación caducada y
+422 por entradas inválidas. Sin credenciales de servicio configuradas se devuelve
+503. Las transiciones directas repetidas devuelven 409; el replay de decisiones
+HITL completadas devuelve el resultado previo.
 
-All application endpoints use the `/api/v1` prefix.
+### Ejemplos HTTP
 
-### Customers
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/customers` | Create customer |
-| GET | `/api/v1/customers` | List customers |
-| GET | `/api/v1/customers/{customer_id}` | Get customer |
-| PATCH | `/api/v1/customers/{customer_id}` | Update customer |
-| DELETE | `/api/v1/customers/{customer_id}` | Delete customer |
-
-### Products
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/products` | Create product |
-| GET | `/api/v1/products` | List products |
-| GET | `/api/v1/products/{product_id}` | Get product |
-| PATCH | `/api/v1/products/{product_id}` | Update product |
-| DELETE | `/api/v1/products/{product_id}` | Delete product |
-
-### Orders
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/orders` | Create order |
-| GET | `/api/v1/orders` | List orders |
-| GET | `/api/v1/orders/{order_id}` | Get order |
-| POST | `/api/v1/orders/{order_id}/confirm` | Confirm order |
-| POST | `/api/v1/orders/{order_id}/cancel` | Cancel order |
-
-### Documents
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/documents` | Ingest document |
-| POST | `/api/v1/documents/search` | Semantic document search |
-
-### AI Assistant
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/assistant/ask` | Ask a question using the RAG pipeline |
-
-## Testing
-
-The project includes unit, integration and RAG retrieval-evaluation tests.
-
-Run the complete test suite:
+Los ejemplos asumen un API local configurado en modo demo. Exporta en tu shell
+`OPERATOR_API_KEY` y `REVIEWER_API_KEY` con las claves de ese mismo API; no se
+cargan en la shell automáticamente al editar `.env`. No publiques sus valores.
 
 ```bash
-poetry run pytest
+export BASE_URL=http://127.0.0.1:8000
+curl --fail-with-body "$BASE_URL/health"
+
+curl --fail-with-body -X POST "$BASE_URL/api/v1/documents" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Devoluciones","content":"Las devoluciones se aceptan dentro de 30 días con el empaque original.","source":"ejemplo-local"}'
+
+curl --fail-with-body -X POST "$BASE_URL/api/v1/assistant/ask" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"¿Qué política de devoluciones tienen?","limit":5}'
 ```
 
-Current test status:
+Para crear un pedido sintético, crea primero cliente y producto:
 
-```text
-87 passed
+```bash
+curl --fail-with-body -X POST "$BASE_URL/api/v1/customers" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Cliente Demo","email":"demo@example.com"}'
+
+curl --fail-with-body -X POST "$BASE_URL/api/v1/products" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"sku":"DEMO-001","name":"Producto Demo","price":"25.50","stock":10}'
 ```
 
-The test suite covers:
+Asigna los IDs devueltos (no asumas que siempre son 1) y crea el pedido. Usa un
+email y SKU nuevos si ya existen los ejemplos:
 
-- Customer and product operations.
-- Transactional order workflows.
-- Order status transitions.
-- Inventory behavior.
-- Document ingestion and chunking.
-- Vector similarity search.
-- Document retrieval.
-- RAG relevance filtering.
-- OpenAI provider behavior using controlled test doubles.
-- RAG fallback behavior.
-- Retrieval evaluation metrics.
-
-## RAG Evaluation
-
-Retrieval quality is evaluated separately from the generative model.
-
-The evaluation suite contains controlled questions and expected document matches. This allows retrieval behavior to be validated deterministically and helps tune the relevance threshold without depending on subjective LLM output.
-
-This separation is intentional:
-
-```text
-Retrieval quality != Generation quality
+```bash
+CUSTOMER_ID=1 # Sustituir por el ID real devuelto.
+PRODUCT_ID=1  # Sustituir por el ID real devuelto.
+curl --fail-with-body -X POST "$BASE_URL/api/v1/orders" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d "{\"customer_id\":$CUSTOMER_ID,\"items\":[{\"product_id\":$PRODUCT_ID,\"quantity\":2}]}"
 ```
 
-A RAG system should first retrieve appropriate context before asking a language model to generate an answer.
+El backend obtiene el precio del producto: dos unidades a 25.50 generan total
+51.00 y stock restante 8. Asigna `ORDER_ID` desde esa respuesta y solicita la
+cancelación, todavía sin ejecutarla:
 
-## Key Technical Decisions
-
-### Async SQLAlchemy
-
-Database access uses SQLAlchemy 2.x with `asyncpg`, keeping the FastAPI request path asynchronous.
-
-### PostgreSQL + pgvector
-
-Transactional application data and vector embeddings are stored within the PostgreSQL ecosystem. pgvector provides semantic similarity search without introducing a separate vector database at this stage of the project.
-
-### Server-Side Business Rules
-
-Prices, totals, stock changes and order transitions are controlled by the backend rather than trusted from client input.
-
-### Inventory Locking
-
-Order creation uses database-level row locking when working with inventory, helping reduce race conditions when concurrent requests attempt to consume the same stock.
-
-### Provider Abstractions
-
-Embedding and chat functionality are accessed through provider abstractions instead of coupling business services directly to OpenAI implementations.
-
-This improves testability and makes it possible to replace provider implementations later.
-
-### Configurable RAG Threshold
-
-The relevance threshold is controlled by server configuration rather than by API clients. This prevents consumers from bypassing the application's relevance policy.
-
-The current default is:
-
-```env
-RAG_MAX_DISTANCE=0.4
+```bash
+ORDER_ID=1 # Sustituir por el ID del pedido creado.
+curl --fail-with-body -X POST "$BASE_URL/api/v1/assistant/ask" \
+  -H "Authorization: Bearer $OPERATOR_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d "{\"question\":\"Cancelar la orden $ORDER_ID\",\"limit\":5}"
 ```
 
-### Safe RAG Fallback
+Si la orden sigue pendiente, la respuesta incluye `status: pending_approval`,
+`run_id` y `approval`. Copia el UUID real a `RUN_ID` y revisa:
 
-When retrieval cannot find sufficiently relevant documentation, the system returns:
-
-```text
-No tengo información suficiente en la documentación disponible para responder esa pregunta.
+```bash
+RUN_ID=UUID_DEVUELTO
+curl --fail-with-body "$BASE_URL/api/v1/assistant/runs/$RUN_ID" \
+  -H "Authorization: Bearer $REVIEWER_API_KEY"
 ```
 
-The chat model is not called in this case, avoiding an unnecessary model request when the available documentation cannot support an answer.
+**Solo después de aprobar expresamente esa orden y acción**, envía la decisión:
 
-## Roadmap
+```bash
+curl --fail-with-body -X POST "$BASE_URL/api/v1/assistant/runs/$RUN_ID/decision" \
+  -H "Authorization: Bearer $REVIEWER_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"approve":true}'
+```
 
-The current version provides the transactional backend and the initial RAG architecture.
+Para rechazar, usa `{"approve":false}` en lugar de aprobar. El booleano debe ser
+real, no una cadena. La decisión usa el ID y la acción persistidos; no permite
+sustituirlos. Tras cancelar, comprueba la orden y el producto con sus rutas GET:
+stock 10. Repetir la misma aprobación completada conserva ese stock; intentar
+cambiar la decisión devuelve 409. Una solicitud expirada exige preparar otra.
 
-Potential next iterations include:
+## Ejecución Docker
 
-- Richer RAG evaluation metrics.
-- Source citations in assistant responses.
-- Multi-chunk context strategies.
-- LangGraph-based orchestration and routing.
-- Tool and action execution.
-- Human-in-the-loop workflows.
-- Redis and RabbitMQ integrations.
-- External automation integrations.
-- Cloud deployment.
+La imagen usa Python fijado por digest, Poetry fijado y dependencias de producción
+del lockfile. Corre como UID 10001 y no copia `.env`. El Compose de despliegue fija
+PostgreSQL/pgvector por digest, mantiene datos en un volumen y publica el API
+solo en `127.0.0.1:8000`. El API usa filesystem de solo lectura, sin capabilities
+y con `no-new-privileges`.
 
-> These items are roadmap work and are not presented as currently implemented features.
+Con `.env` configurado, incluidos `DB_PASSWORD` y ambas claves, revisa y autoriza
+la inicialización antes de arrancar este stack persistente:
 
-## Project Status
+```bash
+docker build -t intelligent-order-assistant:local .
+docker compose -p ioa-demo -f compose.deploy.yaml config --quiet
+docker compose -p ioa-demo -f compose.deploy.yaml up -d --no-build
+```
 
-**Version:** 0.1.0
+El orden es PostgreSQL saludable → servicio `migrate` → API. Compose establece
+su propia conexión a `db:5432/intelligent_orders`; no utiliza el `DATABASE_URL`
+local de `.env`. El API requiere que la inicialización termine correctamente.
+El build local se verificó con el builder clásico; para builds mediante Compose
+se recomienda disponer de Buildx. No ejecutes varios inicializadores a la vez.
 
-The project is under active development as a backend and applied-AI portfolio project focused on production-oriented engineering practices, transactional consistency, testability and grounded AI responses.
+Para actualizar una instancia, reconstruye la imagen y recrea explícitamente
+`migrate` y `api` antes de utilizar la nueva versión:
 
-## Author
+```bash
+docker build -t intelligent-order-assistant:local .
+docker compose -p ioa-demo -f compose.deploy.yaml up -d --no-build --force-recreate migrate api
+```
 
-**Miguel Angel López Monroy**
+Detener y retirar contenedores sin borrar el volumen:
 
-Backend Python Developer
+```bash
+docker compose -p ioa-demo -f compose.deploy.yaml down
+```
 
-- GitHub: [mikelm2020](https://github.com/mikelm2020)
-- LinkedIn: [miguellopezmdev](https://www.linkedin.com/in/miguellopezmdev/)
+El nombre separado evita sustituir los servicios de `compose.yaml`. Este stack
+persistente no se ha validado con datos de producción. La evidencia disponible
+corresponde a imágenes y stacks efímeros de testing. No hay despliegue cloud
+implementado; una exposición pública requiere TLS, gestión de secretos y backups.
+
+## Demostración offline en un stack aislado
+
+`AI_PROVIDER=demo` genera vectores determinísticos de 1536 posiciones según temas
+predefinidos (devoluciones, envíos y pagos); su proveedor de chat devuelve el
+contexto recuperado. **No usa un LLM ni embeddings semánticos reales.** Permite
+observar routing, retrieval, fallback, transacciones y aprobación sin costes externos.
+
+El override `compose.testing.yaml` se combina solo con `compose.deploy.yaml`.
+Fuerza el proveedor demo y una clave OpenAI vacía, usa PostgreSQL efímero sin
+volumen persistente ni puerto publicado y publica el API en localhost:19841.
+Su base es independiente de la usada por pytest en 5434.
+
+En una misma sesión de shell, configura claves exclusivas de la demo y una
+vigencia de 24 horas mediante el mecanismo existente. Esto conserva la caducidad,
+la revisión separada y las validaciones de la acción:
+
+```bash
+export DB_PASSWORD="$(openssl rand -hex 32)"
+export OPERATOR_API_KEY="$(openssl rand -hex 32)"
+export REVIEWER_API_KEY="$(openssl rand -hex 32)"
+export APPROVAL_TTL_SECONDS=86400
+export TEST_IMAGE=intelligent-order-assistant:testing
+
+docker build -t "$TEST_IMAGE" .
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml config --quiet
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml up -d --wait db
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml exec -T db psql -U postgres -d intelligent_order_assistant_test -Atc 'SELECT current_database();'
+```
+
+Continúa solo si devuelve `intelligent_order_assistant_test`:
+
+```bash
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml up -d --no-build --wait
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml exec -T api python -m scripts.demo --prepare --allow-writes
+```
+
+El script crea documentos, cliente, producto y pedido sintéticos, muestra RAG,
+fallback, consulta y deja una cancelación pendiente. Revisa el UUID, la orden y
+la acción impresos. `--allow-writes` hace explícitas las escrituras; la aprobación
+se ejecuta en **otro paso**, tras autorizar la acción concreta:
+
+```bash
+RUN_ID=UUID_DEVUELTO
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml exec -T api python -m scripts.demo --approve "$RUN_ID" --allow-writes
+# Alternativa excluyente: --reject "$RUN_ID" en lugar de --approve.
+```
+
+Para repetir la misma decisión de prueba, ejecuta otra vez el comando de aprobación
+y comprueba pedido/producto vía HTTP. Para probar persistencia, reinicia únicamente
+`api` entre preparación y decisión. Reiniciar o retirar `db` pierde los datos y
+checkpoints efímeros.
+
+También puedes ejecutar `poetry run python -m scripts.demo --prepare --allow-writes`
+contra un API demo local ya configurado; `--url http://127.0.0.1:19841` permite
+seleccionar el puerto. El script carga las claves desde Settings y restringe el
+host HTTP a localhost/127.0.0.1, pero **no verifica la base ni el proveedor del
+servidor remoto**: comprueba el destino y que el API también use demo antes de
+preparar registros.
+
+Retira solo este stack al terminar:
+
+```bash
+docker compose --env-file /dev/null -p ioa-testing -f compose.deploy.yaml -f compose.testing.yaml down
+docker image rm "$TEST_IMAGE"
+unset DB_PASSWORD OPERATOR_API_KEY REVIEWER_API_KEY APPROVAL_TTL_SECONDS TEST_IMAGE
+```
+
+## Pruebas y CI
+
+Lint, formato y unitarias/health no necesitan PostgreSQL operativo:
+
+```bash
+poetry run ruff check --no-cache .
+poetry run ruff format --check --no-cache .
+poetry run pytest tests/unit tests/test_health.py -q
+```
+
+Para integración y evaluación, inicia exclusivamente el servicio de testing:
+
+```bash
+docker compose up -d postgres_test
+docker compose exec -T postgres_test pg_isready -U postgres -d intelligent_order_assistant_test
+docker compose exec -T postgres_test psql -U postgres -d intelligent_order_assistant_test -Atc 'SELECT current_database();'
+```
+
+Espera a que acepte conexiones. Verifica que devuelve la base de testing y que
+`TEST_DATABASE_URL`, si está exportada, apunta exclusivamente a localhost/127.0.0.1,
+puerto **5434**, base **intelligent_order_assistant_test**. Con autorización para
+recrear sus tablas, ejecuta:
+
+```bash
+poetry run python -m scripts.prepare_test_database
+poetry run pytest -q -x --tb=short
+```
+
+`tests/conftest.py` configura testing antes de importar el API y valida URL y
+`current_database()` antes de `drop_all`/`create_all`. Integración/evaluación
+recrean tablas entre casos; las unitarias no ejecutan esas operaciones. No ejecutes
+suite y demo simultáneamente si comparten base. La metadata no valida migraciones:
+la suite incluye además un upgrade/downgrade/upgrade real y `alembic check` en testing.
+
+La cobertura funcional incluye inventario y transiciones concurrentes, HTTP,
+credenciales, RAG/umbral/fallback, aprobación/rechazo, caducidad, invalidación y replay.
+OpenAI se simula mediante mocks/fakes. La evaluación de retrieval utiliza cinco
+casos y vectores sintéticos; no mide la calidad de modelos reales.
+
+**Evidencia local registrada el 8 de octubre de 2026:** suite completa de
+**156 pruebas** pasada en PostgreSQL 17.11; build Docker y demo HITL con cancelación,
+stock 8 → 10 y replay sin doble restitución. Estos son resultados de esa ejecución,
+corresponden a verificaciones locales. Detalles en [el plan](docs/implementation-plan.md) y
+[el registro de desarrollo](DEVELOPMENT_PROGRESS.md).
+
+La revisión técnica final añadió regresiones para URLs con contraseñas codificadas
+y para evitar exponer credenciales de base en `repr(Settings)`: la suite local
+actualizada pasó **158 pruebas en 20.12 s**, exclusivamente en testing verificado.
+
+[El workflow de CI](.github/workflows/ci.yml) está definido para push y pull request:
+instala Poetry/dependencias, prepara pgvector en PostgreSQL 17 efímero, comprueba
+Ruff y formato, ejecuta la suite y construye la imagen. No publica ni despliega.
+La [ejecución remota del PR](https://github.com/mikelm2020/intelligent-order-assistant/actions/runs/37851868516)
+del 8 de octubre de 2026 terminó correctamente: Ruff, formato, **156 pruebas en
+20.87 s** y build Docker. También pasó la ejecución disparada por el push.
+
+## Limitaciones y posibles mejoras
+
+- Autenticación de servicio single-tenant con dos roles compartidos. No hay OAuth,
+  cuentas personales, autorización por propietario ni aislamiento por cliente.
+  La auditoría identifica roles, decisiones y solicitudes, no personas.
+- Routing por reglas en español, con `confirmar`/`cancelar` y referencias
+  `orden/pedido N` (también `#N`). No comprende arbitrariamente el lenguaje natural;
+  el tratamiento de negaciones y ambigüedades se limita a las reglas implementadas.
+- RAG concatena fragmentos y da instrucciones de fundamentación, pero no verifica
+  afirmaciones ni devuelve citas estructuradas. No hay reranking, importación PDF,
+  índice ANN ni evaluación con modelos reales.
+- Sin paginación ni rate limiting. Crear pedidos no tiene `Idempotency-Key`;
+  la garantía de replay documentada aplica a las decisiones del asistente.
+- Checkpoints sin política de retención automatizada. Backups, TLS, rotación de
+  secretos y observabilidad operativa requieren trabajo antes de exposición pública.
+- No hay conversaciones multi-turn de propósito general, interfaz frontend,
+  colas de tareas ni despliegue cloud implementados.
+
+Las mejoras posibles incluyen identidades individuales y permisos por cliente,
+paginación, límites de uso, retención de checkpoints, citas y evaluación de RAG con
+modelos reales. Redis o RabbitMQ solo se justificarían al demostrar una necesidad
+concreta de cache o procesamiento en segundo plano.
+
+## Autor
+
+**Miguel Angel López Monroy** — Backend Python Developer
+
+- [GitHub](https://github.com/mikelm2020)
+- [LinkedIn](https://www.linkedin.com/in/miguellopezmdev/)

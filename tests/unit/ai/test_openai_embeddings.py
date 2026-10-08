@@ -31,4 +31,5 @@ async def test_embed_returns_embedding(monkeypatch):
     create_mock.assert_awaited_once_with(
         model="text-embedding-3-small",
         input="Política de devoluciones",
+        dimensions=1536,
     )
